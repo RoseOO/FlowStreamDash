@@ -743,23 +743,17 @@ app.post('/api/db/import', adminMiddleware, express.raw({ type: 'application/oct
   if (body.length === 0) return res.status(400).json({ error: 'No file uploaded' });
   try {
     mqttClient.disconnect();
-    db.default.close();
+    // Validate it's a SQLite file by checking magic header
+    if (body.slice(0,16).toString('utf8') !== 'SQLite format 3\0') {
+      return res.status(400).json({ error: 'Not a valid SQLite database file' });
+    }
     const bakPath = DB_PATH + '.bak';
     if (fs.existsSync(DB_PATH)) fs.copyFileSync(DB_PATH, bakPath);
     fs.writeFileSync(DB_PATH, body);
-    const Database = (await import('better-sqlite3')).default;
-    db.default = new Database(DB_PATH);
-    db.default.pragma('journal_mode = WAL');
-    db.default.pragma('foreign_keys = ON');
-    setImmediate(restartMqtt);
-    res.json({ success: true, size: body.length });
+    // Send success, then exit — systemd/process manager will restart us with the new DB
+    res.json({ success: true, size: body.length, message: 'Database restored. Server restarting...' });
+    setTimeout(() => process.exit(0), 500);
   } catch (e) {
-    try {
-      const Database = (await import('better-sqlite3')).default;
-      db.default = new Database(DB_PATH);
-      db.default.pragma('journal_mode = WAL');
-    } catch {}
-    setImmediate(restartMqtt);
     res.status(500).json({ error: e.message });
   }
 });
