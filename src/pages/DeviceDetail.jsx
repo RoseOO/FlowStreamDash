@@ -34,17 +34,23 @@ export default function DeviceDetail() {
 
   // Fetch history for all fields we need to graph
   useEffect(() => {
+    if (!sn) return;
     const now = Math.floor(Date.now()/1000);
     const fieldList = allGraphFields.join(',');
+    console.log('[DeviceDetail] Fetching history for', sn, 'fields:', fieldList);
     apiFetch(`/data/${sn}/history?from=${now-GRAPH_SECONDS}&fields=${fieldList}`)
       .then(rows => {
+        console.log('[DeviceDetail] Got', rows.length, 'history rows');
         const byTs={};
         for(const r of rows){
           if(!byTs[r.ts])byTs[r.ts]={ts:r.ts*1000};
           byTs[r.ts][`f${r.field_num}`]=r.value_num;
         }
-        setHistory(Object.values(byTs).sort((a,b)=>a.ts-b.ts));
-      });
+        const sorted = Object.values(byTs).sort((a,b)=>a.ts-b.ts);
+        console.log('[DeviceDetail] Processed', sorted.length, 'points');
+        setHistory(sorted);
+      })
+      .catch(err => console.error('[DeviceDetail] History fetch failed:', err));
   }, [sn, customGraphFields.join(',')]);
 
   // Merge live data including all graph fields
