@@ -109,6 +109,9 @@ a:hover { text-decoration: underline; }
 /* Charts */
 .chart-container { width: 100%; height: 220px; }
 @media(min-width:768px){ .chart-container{height:280px;} }
+.recharts-brush rect:focus, .recharts-brush-slide:focus, .recharts-wrapper svg *:focus { outline: none !important; }
+.recharts-brush rect { outline: none; }
+.recharts-brush-texts text { font-size: 10px; fill: var(--text-dim); }
 
 /* Loading */
 .loading { text-align: center; padding: 30px; color: var(--text-dim); }
