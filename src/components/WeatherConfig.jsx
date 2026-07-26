@@ -6,7 +6,7 @@ export default function WeatherConfig({ apiFetch }) {
   const [saved, setSaved] = useState('');
 
   useEffect(() => {
-    apiFetch('/settings/weather').then(d => { setLat(d.lat||'51.5'); setLon(d.lon||'-0.13'); });
+    apiFetch('/settings/weather').then(d => { setLat(d.lat||'52.5'); setLon(d.lon||'-1.5'); });
   }, []);
 
   async function save(e) {

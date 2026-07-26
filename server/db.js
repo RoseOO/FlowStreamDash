@@ -80,6 +80,26 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS radiation_data (
+    device_sn TEXT NOT NULL,
+    hour_ts INTEGER NOT NULL,
+    radiation_wm2 REAL,
+    production_w REAL,
+    factor REAL,
+    PRIMARY KEY (device_sn, hour_ts),
+    FOREIGN KEY (device_sn) REFERENCES devices(sn)
+  );
+
+  CREATE TABLE IF NOT EXISTS model_accuracy (
+    device_sn TEXT NOT NULL,
+    day_ts INTEGER NOT NULL,
+    predicted_kwh REAL,
+    actual_kwh REAL,
+    error_pct REAL,
+    PRIMARY KEY (device_sn, day_ts),
+    FOREIGN KEY (device_sn) REFERENCES devices(sn)
+  );
+
   CREATE TABLE IF NOT EXISTS rates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     valid_from INTEGER NOT NULL,
@@ -130,6 +150,46 @@ export function deleteApiKey(id) {
 }
 export function validateApiKey(key) {
   return db.prepare('SELECT id, name FROM api_keys WHERE key = ?').get(key);
+}
+
+// ── Radiation Model ─────────────────────────────────────────
+export function getRadiationPairs(sn, limit=500) {
+  return db.prepare(
+    'SELECT hour_ts, radiation_wm2, production_w, factor FROM radiation_data WHERE device_sn=? AND production_w>0 AND radiation_wm2>0 ORDER BY hour_ts DESC LIMIT ?'
+  ).all(sn, limit);
+}
+export function upsertRadiationPair(sn, hourTs, radiation, production, factor) {
+  db.prepare(
+    'INSERT OR REPLACE INTO radiation_data (device_sn, hour_ts, radiation_wm2, production_w, factor) VALUES (?,?,?,?,?)'
+  ).run(sn, hourTs, radiation, production, factor);
+}
+export function getModelStats(sn) {
+  const rows = db.prepare(
+    'SELECT AVG(factor) as avg_factor, COUNT(*) as samples, AVG(production_w) as avg_prod, AVG(radiation_wm2) as avg_rad FROM radiation_data WHERE device_sn=? AND production_w>0 AND radiation_wm2>0'
+  ).get(sn);
+  return rows?.samples ? rows : null;
+}
+export function getRadiationHistory(sn, limit=50) {
+  return db.prepare(
+    'SELECT hour_ts, radiation_wm2, production_w, factor FROM radiation_data WHERE device_sn=? ORDER BY hour_ts ASC LIMIT ?'
+  ).all(sn, limit);
+}
+export function upsertAccuracy(sn, dayTs, predicted, actual) {
+  const error = actual > 0 ? ((predicted - actual) / actual * 100) : null;
+  db.prepare(
+    'INSERT OR REPLACE INTO model_accuracy (device_sn, day_ts, predicted_kwh, actual_kwh, error_pct) VALUES (?,?,?,?,?)'
+  ).run(sn, dayTs, predicted, actual, error);
+}
+export function getAccuracyHistory(sn, limit=90) {
+  return db.prepare(
+    'SELECT day_ts, predicted_kwh, actual_kwh, error_pct FROM model_accuracy WHERE device_sn=? ORDER BY day_ts DESC LIMIT ?'
+  ).all(sn, limit);
+}
+export function getAccuracyStats(sn, days=30) {
+  const cutoff = Math.floor(Date.now()/1000) - days * 86400;
+  return db.prepare(
+    'SELECT COUNT(*) as days, AVG(ABS(error_pct)) as avg_abs_error FROM model_accuracy WHERE device_sn=? AND day_ts>=? AND actual_kwh>0'
+  ).get(sn, cutoff);
 }
 
 // MQTT config

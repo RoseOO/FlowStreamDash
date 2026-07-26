@@ -84,7 +84,7 @@ export default function Dashboard() {
           {label:'Today',val:todayKwh,unit:'kWh',fmt:2,sub:vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null},
           {label:'Saving',val:totalSaving,unit:'£',color:'var(--accent)',fmt:2,prefix:'£'},
           {label:'CO₂',val:co2Today,unit:'kg',color:'var(--accent)',fmt:3},
-          forecast&&{label:'Forecast',val:forecast.predictedTotalKwh,unit:'kWh',color:'var(--accent2)',sub:`${forecast.alreadyProducedKwh}kWh done`},
+          forecast&&{label:forecast.usingLearnedModel?'☀ AI Forecast':'Forecast',val:forecast.predictedTotalKwh,unit:'kWh',color:'var(--accent2)',sub:forecast.usingLearnedModel?`×${forecast.modelFactor} · ${forecast.modelSamples} samples`:`${forecast.alreadyProducedKwh}kWh done`},
           {label:'Projected/yr',val:annualKwh,unit:'kWh',sub:`£${fmt(annualKwh*rate,0)}·${fmt(rate,2)}/kWh`},
         ].filter(Boolean).map(s=>(
           <div key={s.label} className="stat-card" style={{flex:'1 1 80px',minWidth:70,textAlign:'center'}}>
