@@ -31,7 +31,7 @@ export default function Dashboard() {
       apiFetch(`/savings/calculate/${devices[0].sn}?from=${todayStart}&to=${now}`),
       apiFetch(`/stats/${devices[0].sn}/monthly`),
       apiFetch(`/settings/panels/${devices[0].sn}`),
-      apiFetch('/weather?lat=51.5&lon=-0.13'),
+      apiFetch('/weather'),
       apiFetch(`/forecast/${devices[0].sn}`),
     ]).then(([enhanced, todaySave, monthlyData, panels, weatherData, forecastData]) => {
       setStats(enhanced); setSavings(todaySave); setMonthly(monthlyData||[]);
