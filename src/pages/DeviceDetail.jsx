@@ -4,8 +4,7 @@ import { useAuth, useLiveData } from '../App';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, formatValue } from '../../server/fields';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const GRAPH_SECONDS = 1800; // live window
-const INITIAL_LOOKBACK = 21600; // 6 hours for initial load so graphs show daytime data
+const RANGE_OPTIONS = { '1h': 3600, '6h': 21600, '24h': 86400, '2d': 172800, '7d': 604800 };
 const LIVE_COLORS = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548'];
 
 export default function DeviceDetail() {
@@ -18,6 +17,9 @@ export default function DeviceDetail() {
   const [panelConfig, setPanelConfig] = useState({});
   const [snapshot, setSnapshot] = useState({});
   const [flashFields, setFlashFields] = useState(new Set());
+  const [graphRange, setGraphRange] = useState('6h');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const prevLdRef = useRef({});
 
   // Merge: latest DB snapshot (fills cold-start gaps) + live MQTT data
@@ -33,38 +35,42 @@ export default function DeviceDetail() {
   const BASE_FIELDS = [361, 70, 616, 613, 371];
   const allGraphFields = [...new Set([...BASE_FIELDS, ...customGraphFields])];
 
-  // Fetch history for all fields we need to graph
+  // Fetch history for graph fields
   useEffect(() => {
     if (!sn) return;
     const now = Math.floor(Date.now()/1000);
+    let from, to;
+    if (graphRange === 'custom' && customFrom) {
+      from = Math.floor(new Date(customFrom).getTime()/1000);
+      to = customTo ? Math.floor(new Date(customTo).getTime()/1000) : now;
+    } else {
+      const lookback = RANGE_OPTIONS[graphRange] || 21600;
+      from = now - lookback; to = now;
+    }
     const fieldList = allGraphFields.join(',');
-    const lookback = INITIAL_LOOKBACK;
-    console.log('[DeviceDetail] Fetching history for', sn, 'fields:', fieldList, 'from', lookback, 's ago');
-    apiFetch(`/data/${sn}/history?from=${now-lookback}&fields=${fieldList}`)
+    apiFetch(`/data/${sn}/history?from=${from}&to=${to}&fields=${fieldList}`)
       .then(rows => {
-        console.log('[DeviceDetail] Got', rows.length, 'history rows');
         const byTs={};
         for(const r of rows){
           if(!byTs[r.ts])byTs[r.ts]={ts:r.ts*1000};
           byTs[r.ts][`f${r.field_num}`]=r.value_num;
         }
-        const sorted = Object.values(byTs).sort((a,b)=>a.ts-b.ts);
-        console.log('[DeviceDetail] Processed', sorted.length, 'points');
-        setHistory(sorted);
+        setHistory(Object.values(byTs).sort((a,b)=>a.ts-b.ts));
       })
       .catch(err => console.error('[DeviceDetail] History fetch failed:', err));
-  }, [sn, customGraphFields.join(',')]);
+  }, [sn, customGraphFields.join(','), graphRange, customFrom, customTo]);
 
-  // Merge live data including all graph fields
+  // Merge live data (only for 1h/6h ranges where live updates matter)
   useEffect(() => {
     if(!ld._ts)return;
+    const lookback = RANGE_OPTIONS[graphRange] || 21600;
     setHistory(prev=>{
       const pt={ts:ld._ts*1000};
       for(const f of allGraphFields) pt[`f${f}`]=ld[f];
       const next=[...prev,pt];
-      return next.filter(p=>p.ts>=Date.now()-INITIAL_LOOKBACK*1000).slice(-2000);
+      return next.filter(p=>p.ts>=Date.now()-lookback*1000).slice(-3000);
     });
-  }, [ld._ts, ld[361],ld[70],ld[616],ld[613],ld[371],ld[380],ld[381],ld[442],ld[71],ld[614],ld[615],ld[617],ld[618],ld[638]]);
+  }, [ld._ts, ld[361],ld[70],ld[616],ld[613],ld[371],ld[380],ld[381],ld[442],ld[71],ld[614],ld[615],ld[617],ld[618],ld[638], graphRange]);
 
   // Flash fields that changed on live update (skip idle zeros)
   useEffect(() => {
@@ -122,7 +128,26 @@ export default function DeviceDetail() {
       </div>
 
       {/* Live graphs */}
-      <div className="grid-2" style={{marginBottom:16}}>
+      <div className="card" style={{marginBottom:16,padding:'10px 14px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+          <h3 style={{margin:0,marginRight:8}}>Graphs</h3>
+          {Object.keys(RANGE_OPTIONS).map(r=>(
+            <button key={r} className={`btn btn-sm ${graphRange===r?'btn-primary':''}`}
+              style={graphRange!==r?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
+              onClick={()=>setGraphRange(r)}>{r}</button>
+          ))}
+          <button className={`btn btn-sm ${graphRange==='custom'?'btn-primary':''}`}
+            style={graphRange!=='custom'?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
+            onClick={()=>setGraphRange('custom')}>Custom</button>
+          {graphRange==='custom'&&<>
+            <input type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
+              style={{padding:'4px 8px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
+            <span style={{color:'var(--text-dim)',fontSize:12}}>to</span>
+            <input type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)}
+              style={{padding:'4px 8px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
+          </>}
+        </div>
+        <div className="grid-2" style={{marginBottom:0}}>
         <div className="card"><h3>PV & Grid Power (W)</h3>
           <div className="chart-container"><ResponsiveContainer>
             <LineChart animationDuration={0} data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
@@ -168,6 +193,7 @@ export default function DeviceDetail() {
             </ResponsiveContainer></div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Live data with click-to-graph */}

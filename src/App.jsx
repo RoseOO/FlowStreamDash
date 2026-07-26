@@ -32,6 +32,7 @@ export default function App() {
   const [liveData, setLiveData] = useState({});
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('ecoflow_theme') || 'dark');
+  const [alerts, setAlerts] = useState([]);
   const wsRef = useRef(null);
 
   // Theme toggle
@@ -39,6 +40,13 @@ export default function App() {
     setTheme(prev => { const t = prev === 'dark' ? 'light' : 'dark'; localStorage.setItem('ecoflow_theme', t); return t; });
   }, []);
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
+
+  // Request notification permission (non-blocking)
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Auth helpers
   const login = useCallback((t) => { localStorage.setItem('ecoflow_token', t); setToken(t); }, []);
@@ -80,6 +88,13 @@ export default function App() {
             return { ...prev, [msg.sn]: { ...prevDev, ...msg.fields, _ts: msg.ts, _idle: msg.idle || false } };
           });
         }
+        if (msg.type === 'alert' && msg.message) {
+          // Browser notification
+          if (Notification.permission === 'granted') {
+            new Notification('EcoFlow Alert', { body: msg.message, icon: '/icon.svg' });
+          }
+          setAlerts(prev => [...prev.slice(-4), { ...msg, ts: Date.now() }]);
+        }
       } catch {}
     };
     ws.onclose = () => setConnected(false);
@@ -106,6 +121,8 @@ export default function App() {
           <nav className="navbar">
             <span className="logo">⚡ EcoFlow</span>
             <span className={`status-dot ${connected ? 'on' : 'off'}`} title={connected ? 'Connected' : 'Disconnected'}></span>
+            {alerts.length > 0 && <button className="theme-btn" title={`${alerts.length} alerts`} onClick={() => setAlerts([])}
+              style={{color:'var(--warn)',fontWeight:700}}>⚠{alerts.length}</button>}
             <button className="theme-btn" onClick={toggleTheme} title="Toggle theme">{theme==='dark'?'☀':'🌙'}</button>
             <div className="nav-links">
               <NavLink to="/">Dashboard</NavLink>

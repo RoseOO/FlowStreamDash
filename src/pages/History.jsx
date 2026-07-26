@@ -10,6 +10,8 @@ export default function History() {
   const [devices, setDevices] = useState([]);
   const [selectedSn, setSelectedSn] = useState('');
   const [range, setRange] = useState('24h');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [rawData, setRawData] = useState([]);
   const [panelConfig, setPanelConfig] = useState({});
   const [loading, setLoading] = useState(false);
@@ -22,14 +24,20 @@ export default function History() {
   useEffect(() => {
     if (!selectedSn) return;
     setLoading(true);
-    const now = Math.floor(Date.now() / 1000);
-    const ranges = { '1h': 3600, '6h': 21600, '24h': DAY, '7d': 7*DAY, '30d': 30*DAY };
-    const from = now - (ranges[range] || DAY);
-
-    apiFetch(`/data/${selectedSn}/history?from=${from}&to=${now}&fields=${selectedFields.join(',')}`)
+    const now = Math.floor(Date.now()/1000);
+    let from, to;
+    if (range === 'custom' && customFrom) {
+      from = Math.floor(new Date(customFrom).getTime()/1000);
+      to = customTo ? Math.floor(new Date(customTo).getTime()/1000) : now;
+    } else {
+      const ranges = { '1h':3600, '6h':21600, '24h':DAY, '7d':7*DAY, '30d':30*DAY, '90d':90*DAY, '365d':365*DAY };
+      from = now - (ranges[range] || DAY);
+      to = now;
+    }
+    apiFetch(`/data/${selectedSn}/history?from=${from}&to=${to}&fields=${selectedFields.join(',')}`)
       .then(rows => setRawData(rows))
       .finally(() => setLoading(false));
-  }, [selectedSn, range, selectedFields.join(',')]);
+  }, [selectedSn, range, selectedFields.join(','), customFrom, customTo]);
 
   // Client-side downsample: group into ~200 buckets
   const chartData = useMemo(() => {
@@ -91,12 +99,22 @@ export default function History() {
             style={{padding:'8px 12px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontSize:13}}>
             {devices.map(d=><option key={d.sn} value={d.sn}>{d.name||d.sn}</option>)}
           </select>
-          {['1h','6h','24h','7d','30d'].map(r=>(
+          {['1h','6h','24h','7d','30d','90d','365d'].map(r=>(
             <button key={r} className={`btn btn-sm ${range===r?'btn-primary':''}`}
               style={range!==r?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
               onClick={()=>setRange(r)}>{r}</button>
           ))}
+          <button className={`btn btn-sm ${range==='custom'?'btn-primary':''}`}
+            style={range!=='custom'?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
+            onClick={()=>setRange('custom')}>Custom</button>
         </div>
+        {range==='custom'&&<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:16}}>
+          <input type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
+            style={{padding:'6px 10px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
+          <span style={{color:'var(--text-dim)',fontSize:12}}>to</span>
+          <input type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)}
+            style={{padding:'6px 10px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
+        </div>}
         <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
           {fieldOptions.map((f,i)=>(
             <button key={f} onClick={()=>toggleField(f)} className="btn btn-sm"

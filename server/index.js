@@ -666,6 +666,119 @@ app.get('/api/stats/aggregate/all', authMiddleware, (req, res) => {
   });
 });
 
+// ── Performance Ratio (industry-standard solar metric) ──────
+// PR = actual_kWh / (rated_kW × peak_sun_hours_in_range)
+app.get('/api/stats/:sn/pr', authMiddleware, async (req, res) => {
+  const { from, to } = req.query;
+  const now = Math.floor(Date.now()/1000);
+  const fromTs = from ? parseInt(from) : now - 30*86400;
+  const toTs = to ? parseInt(to) : now;
+  const pv1W = parseInt(db.getDeviceConfig(req.params.sn, 'pv1_rated_watts')||'0');
+  const pv2W = parseInt(db.getDeviceConfig(req.params.sn, 'pv2_rated_watts')||'0');
+  const totalKW = (pv1W + pv2W) / 1000;
+  if (totalKW <= 0) return res.json({ error: 'Set panel ratings in Setup first' });
+
+  const stats = getStats(req.params.sn, fromTs, toTs);
+  const actualKwh = stats.totalKwh;
+
+  // Get peak sun hours from Open-Meteo for each day
+  const lat = db.getSetting('weather_lat') || DEFAULT_LAT;
+  const lon = db.getSetting('weather_lon') || DEFAULT_LON;
+  let totalPeakSunHours = 0, days = 0;
+
+  try {
+    for (let dayTs = Math.floor(fromTs/86400)*86400; dayTs < toTs; dayTs += 86400) {
+      const date = new Date(dayTs*1000).toISOString().slice(0,10);
+      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
+      const resp = await fetch(url); const data = await resp.json();
+      if (data.hourly) {
+        const dailyRadiation = data.hourly.shortwave_radiation.reduce((a,b)=>a+(b||0),0);
+        totalPeakSunHours += dailyRadiation / 1000; // W/m² sum / 1000 = peak sun hours
+        days++;
+      }
+      if (days % 3 === 0) await new Promise(r => setTimeout(r, 200));
+    }
+  } catch {}
+
+  const peakSunHours = round2(totalPeakSunHours);
+  const expectedKwh = round2(totalKW * peakSunHours);
+  const pr = expectedKwh > 0 ? round2(actualKwh / expectedKwh * 100) : null;
+
+  res.json({
+    actualKwh, peakSunHours, totalKwRated: round2(totalKW),
+    expectedKwh, performanceRatioPct: pr,
+    days, rating: pr ? (pr > 80 ? 'Excellent' : pr > 65 ? 'Good' : pr > 50 ? 'Fair' : 'Poor') : null,
+  });
+});
+
+// ── Comparison mode ─────────────────────────────────────────
+app.get('/api/stats/:sn/compare', authMiddleware, (req, res) => {
+  const { from1, to1, from2, to2 } = req.query;
+  if (!from1 || !to1 || !from2 || !to2) return res.status(400).json({ error: 'Both date ranges required' });
+  const s1 = getStats(req.params.sn, parseInt(from1), parseInt(to1));
+  const s2 = getStats(req.params.sn, parseInt(from2), parseInt(to2));
+  res.json({
+    period1: { from: from1, to: to1, ...s1 },
+    period2: { from: from2, to: to2, ...s2 },
+    deltaKwh: round2(s2.totalKwh - s1.totalKwh),
+    deltaPct: s1.totalKwh > 0 ? round2((s2.totalKwh - s1.totalKwh) / s1.totalKwh * 100) : null,
+  });
+});
+
+// ── Data quality / Uptime ───────────────────────────────────
+app.get('/api/stats/:sn/quality', authMiddleware, (req, res) => {
+  const stats = getStats(req.params.sn, Math.floor(Date.now()/1000)-7*86400, Math.floor(Date.now()/1000));
+  if (!stats.hourlyProfile) return res.json({ error: 'Not enough data' });
+
+  // Count generating hours (where avg > 5W) and check if we have data for them
+  let genHours = 0, dataHours = 0;
+  for (let h = 0; h < 24; h++) {
+    if (stats.hourlyProfile[h]?.avg > 5) genHours++;
+  }
+  // Check how many of those gen hours have actual data points in the last 7 days
+  if (genHours > 0) {
+    const now = Math.floor(Date.now()/1000);
+    const rows = db.getHistoricalData(req.params.sn, now-7*86400, now, [361]);
+    const hoursWithData = new Set();
+    for (const r of rows) { if (r.value_num > 0) hoursWithData.add(new Date(r.ts*1000).getHours()); }
+    for (let h = 0; h < 24; h++) {
+      if (stats.hourlyProfile[h]?.avg > 5 && hoursWithData.has(h)) dataHours++;
+    }
+  }
+
+  res.json({
+    generatingHoursPerDay: genHours,
+    hoursWithData: dataHours,
+    uptimePct: genHours > 0 ? round2(dataHours / genHours * 100) : null,
+    rating: dataHours >= genHours * 0.95 ? 'Excellent' : dataHours >= genHours * 0.8 ? 'Good' : dataHours >= genHours * 0.5 ? 'Fair' : 'Poor',
+    period: '7 days',
+  });
+});
+
+// ── Degradation tracking ────────────────────────────────────
+app.get('/api/stats/:sn/degradation', authMiddleware, (req, res) => {
+  const pv1W = parseInt(db.getDeviceConfig(req.params.sn, 'pv1_rated_watts')||'0');
+  const pv2W = parseInt(db.getDeviceConfig(req.params.sn, 'pv2_rated_watts')||'0');
+  if (pv1W <= 0 && pv2W <= 0) return res.json({ error: 'Set panel ratings first' });
+
+  // Get monthly average efficiency since data began
+  const rows = db.default.prepare(
+    `SELECT CAST(ts/86400/30 AS INTEGER) as m, AVG(value_num) as avg_w, MAX(value_num) as peak_w
+     FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0
+     GROUP BY m ORDER BY m ASC LIMIT 36`
+  ).all(req.params.sn);
+
+  const totalRated = pv1W + pv2W;
+  res.json(rows.map(r => ({
+    month: new Date(r.m * 30 * 86400 * 1000).toLocaleDateString('en',{year:'numeric',month:'short'}),
+    avgEfficiencyPct: round2(r.avg_w / totalRated * 100),
+    peakEfficiencyPct: round2(r.peak_w / totalRated * 100),
+    avgWatts: round2(r.avg_w),
+    peakWatts: round2(r.peak_w),
+    monthBlock: r.m,
+  })));
+});
+
 // Per-device panel config
 app.get('/api/settings/panels/:sn', authMiddleware, (req, res) => {
   res.json({
@@ -1225,6 +1338,14 @@ setInterval(() => {
       const msg = JSON.stringify({ type: 'data', sn, fields: zeros, ts: Math.floor(now), idle: true });
       for (const client of wss.clients) {
         if (client.readyState === 1) client.send(msg);
+      }
+      // Alert if idle during expected generation hours (6am-9pm approximate)
+      const hour = new Date().getHours();
+      if (hour >= 6 && hour <= 21) {
+        const alertMsg = JSON.stringify({ type: 'alert', sn, message: `No data from ${sn} for ${Math.round(idle/60)}min — possible fault`, level: 'warn' });
+        for (const client of wss.clients) {
+          if (client.readyState === 1) client.send(alertMsg);
+        }
       }
     }
   }
