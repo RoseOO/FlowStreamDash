@@ -93,7 +93,12 @@ export default function DeviceDetail() {
 
   return (
     <div>
-      <h2 style={{marginBottom:16}}>{name} <span style={{fontSize:13,color:'var(--text-dim)',fontFamily:'monospace',fontWeight:400}}>{sn}</span></h2>
+      <h2 style={{marginBottom:16}}>{name} <span style={{fontSize:13,color:'var(--text-dim)',fontFamily:'monospace',fontWeight:400}}>{sn}</span>
+        <span style={{marginLeft:12,fontSize:11,color:ld._idle?'var(--warn)':'var(--text-dim)',fontWeight:400}}>
+          {ld._ts?`Last update: ${new Date(ld._ts * 1000).toLocaleTimeString()}`:'No data yet'}
+          {ld._idle&&' · Idle'}
+        </span>
+      </h2>
 
       {/* Stat cards */}
       <div className="grid-4" style={{marginBottom:16}}>
