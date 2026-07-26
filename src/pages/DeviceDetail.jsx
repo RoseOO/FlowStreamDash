@@ -1,0 +1,157 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
+import { useAuth, useLiveData } from '../App';
+import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, formatValue } from '../../server/fields';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+const GRAPH_SECONDS = 1800;
+const LIVE_COLORS = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548'];
+
+export default function DeviceDetail() {
+  const { sn } = useParams();
+  const { apiFetch } = useAuth();
+  const { liveData } = useLiveData();
+  const [history, setHistory] = useState([]);
+  const [device, setDevice] = useState(null);
+  const [customGraphFields, setCustomGraphFields] = useState([]);
+  const [panelConfig, setPanelConfig] = useState({});
+
+  const ld = liveData[sn] || {};
+
+  useEffect(() => {
+    apiFetch('/devices').then(devs => { const d=devs.find(x=>x.sn===sn); if(d)setDevice(d); });
+    apiFetch(`/settings/panels/${sn}`).then(setPanelConfig);
+  }, [sn]);
+
+  // Fetch history
+  useEffect(() => {
+    const now = Math.floor(Date.now()/1000);
+    apiFetch(`/data/${sn}/history?from=${now-GRAPH_SECONDS}&fields=361,70,616,613,371`)
+      .then(rows => {
+        const byTs={};
+        for(const r of rows){
+          if(!byTs[r.ts])byTs[r.ts]={ts:r.ts*1000};
+          byTs[r.ts][`f${r.field_num}`]=r.value_num;
+        }
+        setHistory(Object.values(byTs).sort((a,b)=>a.ts-b.ts));
+      });
+  }, [sn]);
+
+  // Merge live
+  useEffect(() => {
+    if(!ld._ts)return;
+    setHistory(prev=>{
+      const pt={ts:ld._ts*1000,f361:ld[361],f70:ld[70],f616:ld[616],f613:ld[613],f371:ld[371]};
+      const next=[...prev,pt];
+      return next.filter(p=>p.ts>=Date.now()-GRAPH_SECONDS*1000).slice(-500);
+    });
+  }, [ld._ts,ld[361],ld[70],ld[616],ld[613],ld[371]]);
+
+  function fmt(v,d=0){return v!=null?v.toFixed(d):'--';}
+
+  function toggleCustomField(fnum) {
+    setCustomGraphFields(prev => prev.includes(fnum) ? prev.filter(x=>x!==fnum) : [...prev,fnum]);
+  }
+
+  // Efficiency calc
+  const pv1Rated = parseInt(panelConfig.pv1_rated_watts) || 0;
+  const pv2Rated = parseInt(panelConfig.pv2_rated_watts) || 0;
+  const pv1Eff = pv1Rated > 0 && ld[361] > 0 ? (ld[361] / pv1Rated * 100) : null;
+  const pv2Eff = pv2Rated > 0 && ld[70] > 0 ? (ld[70] / pv2Rated * 100) : null;
+
+  if(!device)return<div className="loading"><div className="spinner"></div></div>;
+  const name=device.name||sn;
+
+  return (
+    <div>
+      <h2 style={{marginBottom:16}}>{name} <span style={{fontSize:13,color:'var(--text-dim)',fontFamily:'monospace',fontWeight:400}}>{sn}</span></h2>
+
+      {/* Stat cards */}
+      <div className="grid-4" style={{marginBottom:16}}>
+        {[{l:'PV1 Power',v:ld[361],u:'W',c:'var(--pv1)',e:pv1Eff},{l:'PV1 Volt',v:ld[380],u:'V',c:'var(--pv1)'},{l:'PV1 Curr',v:ld[381],u:'A',c:'var(--pv1)'},
+          {l:'PV2 Power',v:ld[70],u:'W',c:'var(--pv2)',e:pv2Eff},{l:'PV2 Volt',v:ld[442],u:'V',c:'var(--pv2)'},{l:'PV2 Curr',v:ld[71],u:'A',c:'var(--pv2)'},
+          {l:'Grid Power',v:ld[616],u:'W',c:ld[616]<0?'var(--accent)':'var(--warn)'},{l:'Grid Volt',v:ld[613],u:'V',c:'var(--volt)'},
+        ].map(s=>(
+          <div key={s.l} className="stat-card" style={{padding:'10px 14px'}}>
+            <div className="label">{s.l}{s.e!=null?<span style={{marginLeft:6,fontSize:10,color:s.e>70?'var(--accent)':'var(--warn)'}}>{fmt(s.e,1)}% eff</span>:null}</div>
+            <div className="value" style={{fontSize:20,color:s.c}}>{fmt(s.v,s.u==='A'?2:1)}<span className="unit">{s.u}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Live graphs */}
+      <div className="grid-2" style={{marginBottom:16}}>
+        <div className="card"><h3>PV & Grid Power (W)</h3>
+          <div className="chart-container"><ResponsiveContainer>
+            <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+              <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
+              <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
+              <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
+              <Line type="monotone" dataKey="f361" stroke="#2196F3" name="PV1" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line type="monotone" dataKey="f70" stroke="#4CAF50" name="PV2" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line type="monotone" dataKey="f616" stroke="#F44336" name="Grid" dot={false} strokeWidth={2} connectNulls={true}/>
+            </LineChart>
+          </ResponsiveContainer></div>
+        </div>
+        <div className="card"><h3>Grid Voltage (V)</h3>
+          <div className="chart-container"><ResponsiveContainer>
+            <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+              <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
+              <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}} domain={['auto','auto']}/>
+              <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
+              <Line type="monotone" dataKey="f613" stroke="#FF9800" name="Voltage" dot={false} strokeWidth={1.5} connectNulls={true}/>
+            </LineChart>
+          </ResponsiveContainer></div>
+        </div>
+        <div className="card"><h3>Inverter Temperature (°C)</h3>
+          <div className="chart-container"><ResponsiveContainer>
+            <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+              <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
+              <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
+              <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
+              <Line type="monotone" dataKey="f371" stroke="#E91E63" name="Temp" dot={false} strokeWidth={1.5} connectNulls={true}/>
+            </LineChart>
+          </ResponsiveContainer></div>
+        </div>
+        {/* Custom graph */}
+        {customGraphFields.length>0&&(
+          <div className="card"><h3>Selected Fields {customGraphFields.map(f=>(<span key={f} style={{fontSize:11,marginLeft:6,color:'var(--text-dim)',cursor:'pointer'}} onClick={()=>toggleCustomField(f)}>✕ {getFieldLabel(f)}</span>))}</h3>
+            <div className="chart-container"><ResponsiveContainer>
+              <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+                <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
+                <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
+                <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
+                {customGraphFields.map((f,i)=><Line key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
+              </LineChart>
+            </ResponsiveContainer></div>
+          </div>
+        )}
+      </div>
+
+      {/* Live data with click-to-graph */}
+      <div className="card">
+        <h2>Live Data <span style={{fontSize:11,color:'var(--text-dim)',fontWeight:400}}>(click a value to add to graph)</span></h2>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:'6px 20px',fontSize:13}}>
+          {DISPLAY_ORDER.map(f=>{
+            if(!FIELD_META[f])return null;
+            const section=DISPLAY_SECTIONS[f];
+            const val=ld[f];
+            const selected=customGraphFields.includes(f);
+            return (
+              <React.Fragment key={f}>
+                {section&&<div style={{gridColumn:'1/-1',color:'var(--text-dim)',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.5px',padding:'10px 0 2px',borderBottom:'1px solid var(--border)'}}>{section}</div>}
+                <div onClick={()=>toggleCustomField(f)} style={{display:'flex',justifyContent:'space-between',padding:'3px 8px',borderRadius:4,cursor:'pointer',
+                  background:selected?'rgba(33,150,243,.15)':(val!=null?'var(--bg-card2)':'transparent'),border:selected?'1px solid var(--accent2)':'1px solid transparent'}}>
+                  <span style={{color:'var(--text-dim)'}}>{getFieldLabel(f)}</span>
+                  <span style={{fontWeight:600,fontVariantNumeric:'tabular-nums',color:val!=null?'var(--text)':'var(--text-dim)'}}>
+                    {formatValue(f,val)} {FIELD_META[f].unit&&<span style={{fontSize:10,color:'var(--text-dim)',fontWeight:400}}>{FIELD_META[f].unit}</span>}
+                  </span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

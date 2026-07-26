@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+*.db
+*.db.bak
+.env
+.DS_Store
+*.log
+ecoflow_log.csv

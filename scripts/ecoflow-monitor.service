@@ -1,0 +1,32 @@
+[Unit]
+Description=EcoFlow Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ecoflow
+Group=ecoflow
+WorkingDirectory=/opt/ecoflow-monitor
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ecoflow-monitor
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/ecoflow-monitor /opt/ecoflow-monitor/data
+ReadOnlyPaths=/opt/ecoflow-monitor
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target
