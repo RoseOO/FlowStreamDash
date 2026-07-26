@@ -4,7 +4,8 @@ import { useAuth, useLiveData } from '../App';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, formatValue } from '../../server/fields';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const GRAPH_SECONDS = 1800;
+const GRAPH_SECONDS = 1800; // live window
+const INITIAL_LOOKBACK = 21600; // 6 hours for initial load so graphs show daytime data
 const LIVE_COLORS = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548'];
 
 export default function DeviceDetail() {
@@ -37,8 +38,9 @@ export default function DeviceDetail() {
     if (!sn) return;
     const now = Math.floor(Date.now()/1000);
     const fieldList = allGraphFields.join(',');
-    console.log('[DeviceDetail] Fetching history for', sn, 'fields:', fieldList);
-    apiFetch(`/data/${sn}/history?from=${now-GRAPH_SECONDS}&fields=${fieldList}`)
+    const lookback = INITIAL_LOOKBACK;
+    console.log('[DeviceDetail] Fetching history for', sn, 'fields:', fieldList, 'from', lookback, 's ago');
+    apiFetch(`/data/${sn}/history?from=${now-lookback}&fields=${fieldList}`)
       .then(rows => {
         console.log('[DeviceDetail] Got', rows.length, 'history rows');
         const byTs={};
@@ -60,7 +62,7 @@ export default function DeviceDetail() {
       const pt={ts:ld._ts*1000};
       for(const f of allGraphFields) pt[`f${f}`]=ld[f];
       const next=[...prev,pt];
-      return next.filter(p=>p.ts>=Date.now()-GRAPH_SECONDS*1000).slice(-500);
+      return next.filter(p=>p.ts>=Date.now()-INITIAL_LOOKBACK*1000).slice(-2000);
     });
   }, [ld._ts, ld[361],ld[70],ld[616],ld[613],ld[371],ld[380],ld[381],ld[442],ld[71],ld[614],ld[615],ld[617],ld[618],ld[638]]);
 

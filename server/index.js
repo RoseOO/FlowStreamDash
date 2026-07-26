@@ -1204,6 +1204,7 @@ setInterval(() => {
 }, 5000);
 
 // ── Device idle detection ──────────────────────────────────
+const POWER_FIELDS = [361, 70, 616]; // PV1, PV2, Grid
 const IDLE_TIMEOUT = 120;
 const idleSent = {}; // track last time we sent idle zeros per device
 
