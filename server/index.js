@@ -1058,8 +1058,14 @@ function restartMqtt() {
 }
 
 // ── Data logger ─────────────────────────────────────────────
-const deviceMsgTimes = {}; // sn -> timestamp of last real MQTT message
-const deviceLastPower = {}; // sn -> was there generation in last message?
+const deviceMsgTimes = {};
+const deviceLastPower = {};
+
+// Seed with known devices on startup so idle detection covers them immediately
+const knownDevices = db.getDevices() || [];
+for (const d of knownDevices) {
+  deviceMsgTimes[d.sn] = Math.floor(Date.now() / 1000);
+}
 
 mqttClient.on('data', ({ sn, fields }) => {
   const ts = Math.floor(Date.now() / 1000);
@@ -1198,24 +1204,27 @@ setInterval(() => {
 }, 5000);
 
 // ── Device idle detection ──────────────────────────────────
-// When a device stops sending MQTT (no generation at night/cloud),
-// emit synthetic zeros for power fields so the UI updates.
-const POWER_FIELDS = [361, 70, 616]; // PV1, PV2, Grid
-const IDLE_TIMEOUT = 120; // seconds without data before we zero out
+const IDLE_TIMEOUT = 120;
+const idleSent = {}; // track last time we sent idle zeros per device
+
 setInterval(() => {
   const now = Date.now() / 1000;
-  for (const sn of Object.keys(deviceMsgTimes)) {
+  const devices = db.getDevices();
+  for (const d of devices) {
+    const sn = d.sn;
+    // Ensure we have an entry
+    if (!deviceMsgTimes[sn]) deviceMsgTimes[sn] = 0;
     const idle = now - deviceMsgTimes[sn];
     if (idle > IDLE_TIMEOUT) {
-      // Don't spam — only emit zero if the last values weren't already zero
+      const lastSent = idleSent[sn] || 0;
+      if (now - lastSent < 55) continue; // only emit every ~60s
+      idleSent[sn] = now;
       const zeros = {};
       for (const f of POWER_FIELDS) zeros[f] = 0;
       const msg = JSON.stringify({ type: 'data', sn, fields: zeros, ts: Math.floor(now), idle: true });
       for (const client of wss.clients) {
         if (client.readyState === 1) client.send(msg);
       }
-      // Reset timer so we don't emit every 5 seconds
-      deviceMsgTimes[sn] = now - IDLE_TIMEOUT + 60; // emit every 60s when idle
     }
   }
 }, 5000);
