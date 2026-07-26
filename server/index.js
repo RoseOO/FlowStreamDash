@@ -297,6 +297,94 @@ app.get('/api/public/export/:sn', apiKeyAuth, (req, res) => {
   res.send(csvRows.join('\n'));
 });
 
+// ── Public API: New analysis endpoints ─────────────────────
+app.get('/api/public/device/:sn/pr', apiKeyAuth, (req, res) => {
+  const { from, to } = req.query;
+  const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-30*86400);
+  const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
+  const pv1W = parseInt(db.getDeviceConfig(req.params.sn, 'pv1_rated_watts')||'0');
+  const pv2W = parseInt(db.getDeviceConfig(req.params.sn, 'pv2_rated_watts')||'0');
+  const totalKW = (pv1W + pv2W) / 1000;
+  if (totalKW <= 0) return res.json({ error: 'Set panel ratings in Setup first' });
+  const stats = getStats(req.params.sn, fromTs, toTs);
+  // Approximate PR from historical data (peak sun hours ≈ radiation data / 1000)
+  const peakSunHours = round2(stats.totalKwh / totalKW * 0.8); // quick approximation
+  const expectedKwh = round2(totalKW * peakSunHours);
+  const pr = expectedKwh > 0 ? round2(stats.totalKwh / expectedKwh * 100) : null;
+  res.json({ actualKwh: stats.totalKwh, peakSunHours, totalKwRated: round2(totalKW),
+    expectedKwh, performanceRatioPct: pr, rating: pr ? (pr>80?'Excellent':pr>60?'Good':pr>40?'Fair':'Poor') : null });
+});
+
+app.get('/api/public/device/:sn/quality', apiKeyAuth, (req, res) => {
+  const stats = getStats(req.params.sn, Math.floor(Date.now()/1000)-7*86400, Math.floor(Date.now()/1000));
+  if (!stats.hourlyProfile) return res.json({ error: 'Not enough data' });
+  let genHours = 0, dataHours = 0;
+  for (let h=0;h<24;h++) if (stats.hourlyProfile[h]?.avg>5) genHours++;
+  if (genHours>0){
+    const rows = db.getHistoricalData(req.params.sn, Math.floor(Date.now()/1000)-7*86400, Math.floor(Date.now()/1000), [361]);
+    const hwd = new Set();
+    for (const r of rows) { if (r.value_num>0) hwd.add(new Date(r.ts*1000).getHours()); }
+    for (let h=0;h<24;h++) if (stats.hourlyProfile[h]?.avg>5&&hwd.has(h)) dataHours++;
+  }
+  res.json({ generatingHoursPerDay: genHours, hoursWithData: dataHours,
+    uptimePct: genHours>0?round2(dataHours/genHours*100):null });
+});
+
+app.get('/api/public/device/:sn/degradation', apiKeyAuth, (req, res) => {
+  const pv1W = parseInt(db.getDeviceConfig(req.params.sn,'pv1_rated_watts')||'0');
+  const pv2W = parseInt(db.getDeviceConfig(req.params.sn,'pv2_rated_watts')||'0');
+  if (pv1W<=0&&pv2W<=0) return res.json({error:'Set panel ratings first'});
+  const rows = db.default.prepare(
+    `SELECT CAST(ts/86400/30 AS INTEGER) as m, AVG(value_num) as avg_w, MAX(value_num) as peak_w
+     FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0 GROUP BY m ORDER BY m ASC LIMIT 36`
+  ).all(req.params.sn);
+  const totalRated=pv1W+pv2W;
+  res.json(rows.map(r=>({month:new Date(r.m*30*86400*1000).toLocaleDateString('en',{year:'numeric',month:'short'}),
+    avgEfficiencyPct:round2(r.avg_w/totalRated*100),peakEfficiencyPct:round2(r.peak_w/totalRated*100)})));
+});
+
+app.get('/api/public/device/:sn/model', apiKeyAuth, (req, res) => {
+  const model = db.getModelStats(req.params.sn);
+  const recent = db.getRadiationPairs(req.params.sn, 24);
+  res.json({ learnedFactor: model?.avg_factor?round2(model.avg_factor):null, samples: model?.samples||0,
+    modelReady: (model?.samples||0)>10, recentPairs: recent.slice(0,24).map(r=>({
+      hour: new Date(r.hour_ts*1000).toISOString(), radiation: r.radiation_wm2, production: r.production_w, factor: round4(r.factor),
+    }))});
+});
+
+// PV Gen Window / Daylight endpoint
+app.get('/api/public/device/:sn/daylight', apiKeyAuth, (req, res) => {
+  const { from, to } = req.query;
+  const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-86400);
+  const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
+  const stats = getStats(req.params.sn, fromTs, toTs);
+  const pv1W = parseInt(db.getDeviceConfig(req.params.sn, 'pv1_rated_watts')||'0');
+  const pv2W = parseInt(db.getDeviceConfig(req.params.sn, 'pv2_rated_watts')||'0');
+  res.json({
+    pv1: stats.daylight?.pv1 || null,
+    pv2: stats.daylight?.pv2 || null,
+    pv1RatedW: pv1W, pv2RatedW: pv2W,
+    period_from: new Date(fromTs*1000).toISOString(),
+    period_to: new Date(toTs*1000).toISOString(),
+  });
+});
+
+// Weather & cloud data
+app.get('/api/public/weather', apiKeyAuth, async (req, res) => {
+  const lat = db.getSetting('weather_lat') || DEFAULT_LAT;
+  const lon = db.getSetting('weather_lon') || DEFAULT_LON;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloud_cover,shortwave_radiation&timezone=auto&forecast_days=1`;
+    const resp = await fetch(url); const data = await resp.json();
+    const hours = data.hourly?.time?.map((t,i) => ({
+      time: t, hour: new Date(t).getHours(),
+      cloudCoverPct: data.hourly.cloud_cover?.[i],
+      radiationWm2: data.hourly.shortwave_radiation?.[i],
+    })) || [];
+    res.json({ lat, lon, hours });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── EcoFlow Login Route ─────────────────────────────────────
 app.post('/api/ecoflow/login', authMiddleware, async (req, res) => {
   const { email, password } = req.body;
@@ -583,6 +671,10 @@ function computeDaylightStats(pvRows, hourlyProfile, panelRating) {
   const lastHour = genHours[genHours.length - 1];
   let daylightSum = 0, daylightCount = 0, daylightPeak = 0;
 
+  // Find exact start/stop time from raw data (minute-level precision)
+  let firstMinute = null, lastMinute = null;
+  const THRESHOLD = 5; // watts - considered "generating"
+
   for (const r of pvRows) {
     if (r.value_num == null || r.value_num <= 0) continue;
     const hour = new Date(r.ts * 1000).getHours();
@@ -591,11 +683,25 @@ function computeDaylightStats(pvRows, hourlyProfile, panelRating) {
       daylightCount++;
       if (r.value_num > daylightPeak) daylightPeak = r.value_num;
     }
+    // Track exact start/stop minute
+    if (r.value_num > THRESHOLD) {
+      const d = new Date(r.ts * 1000);
+      const minuteTs = d.getHours() * 60 + d.getMinutes();
+      if (firstMinute === null || minuteTs < firstMinute) firstMinute = minuteTs;
+      if (lastMinute === null || minuteTs > lastMinute) lastMinute = minuteTs;
+    }
+  }
+
+  function minuteToStr(m) {
+    if (m === null) return '--';
+    const h = Math.floor(m / 60), min = m % 60;
+    return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
   }
 
   return {
     firstHour, lastHour,
-    window: `${String(firstHour).padStart(2,'0')}:00-${String(lastHour).padStart(2,'0')}:00`,
+    firstMinute, lastMinute,
+    window: minuteToStr(firstMinute) + '-' + minuteToStr(lastMinute),
     genHours: genHours.length,
     daylightAvgW: round2(daylightCount > 0 ? daylightSum / daylightCount : 0),
     daylightPeakW: round2(daylightPeak),

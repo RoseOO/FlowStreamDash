@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, LineChart, Line, Legend, ComposedChart } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, LineChart, Line, Legend, ComposedChart, Brush } from 'recharts';
 
 const DAY = 86400;
 
@@ -104,6 +104,7 @@ export default function Stats() {
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
               <Bar isAnimationActive={false} dataKey="avgEfficiencyPct" fill="#2196F3" name="Avg Eff %" radius={[2,2,0,0]}/>
               <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="peakEfficiencyPct" stroke="#4CAF50" name="Peak Eff %" dot={false} strokeWidth={2}/>
+            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
             </ComposedChart>
           </ResponsiveContainer></div>
         </div>}
@@ -120,12 +121,14 @@ export default function Stats() {
               <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
               <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="avg" stroke="#2196F3" fill="#2196F3" fillOpacity={0.2} name="Avg Power (W)"/>
+            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
             </AreaChart></ResponsiveContainer></div>}
           {tab==='daily'&&<div style={{width:'100%',height:300}}><ResponsiveContainer>
             <BarChart animationDuration={0} data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="date" tick={{fontSize:10,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
               <Bar isAnimationActive={false} dataKey="kwh" fill="#4CAF50" name="kWh" radius={[2,2,0,0]}/>
+            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
             </BarChart></ResponsiveContainer></div>}
         </div>
       </>}

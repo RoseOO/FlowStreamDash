@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../App';
 import { FIELD_META, DISPLAY_ORDER, getFieldLabel } from '../../server/fields';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Brush } from 'recharts';
 
 const DAY = 86400;
 
@@ -150,7 +150,8 @@ export default function History() {
                     stroke={colors[i%colors.length]} name={label} dot={false}
                     strokeWidth={1.5} connectNulls={true}/>
                 })}
-              </LineChart>
+              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            </LineChart>
             </ResponsiveContainer>
           </div>
         }

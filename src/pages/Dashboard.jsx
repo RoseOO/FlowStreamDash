@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend, Brush } from 'recharts';
 
 const DAY = 86400;
 
@@ -100,7 +100,7 @@ export default function Dashboard() {
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
         {[{label:'Live Solar',val:livePV,unit:'W',color:'var(--pv2)'},
           {label:'Today',val:todayKwh,unit:'kWh',fmt:2,sub:vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null},
-          {label:'Saving',val:totalSaving,unit:'£',color:'var(--accent)',fmt:2,prefix:'£'},
+          {label:'Saving',val:totalSaving,color:'var(--accent)',fmt:2,prefix:'£'},
           {label:'CO₂',val:co2Today,unit:'kg',color:'var(--accent)',fmt:3},
           forecast&&{label:forecast.usingLearnedModel?'☀ AI Forecast':'Forecast',val:forecast.predictedTotalKwh,unit:'kWh',color:'var(--accent2)',sub:forecast.usingLearnedModel?`×${forecast.modelFactor} · ${forecast.modelSamples} samples`:`${forecast.alreadyProducedKwh}kWh done`},
           {label:'Projected/yr',val:annualKwh,unit:'kWh',sub:`£${fmt(annualKwh*rate,0)}·${fmt(rate,2)}/kWh`},
@@ -197,23 +197,27 @@ export default function Dashboard() {
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend wrapperStyle={{fontSize:11}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="today" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.2} name="Today"/>
             <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="yesterday" stroke="#8890a5" strokeDasharray="6 3" name="Yesterday" dot={false}/>
-          </ComposedChart></ResponsiveContainer>}
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            </ComposedChart></ResponsiveContainer>}
           {tab==='weather'&&(weather?<ResponsiveContainer><AreaChart animationDuration={0} data={weather.map(w=>({hour:`${w.hour}h`,cloud:w.cloudCover}))}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}} domain={[0,100]}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="cloud" stroke="#607D8B" fill="#607D8B" fillOpacity={0.25} name="Cloud %"/>
-          </AreaChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Set lat/lon in Setup ☀ Weather for cloud data</p>)}
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            </AreaChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Set lat/lon in Setup ☀ Weather for cloud data</p>)}
           {tab==='compare'&&todayProfile.length>0&&<ResponsiveContainer><AreaChart animationDuration={0} data={todayProfile}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend wrapperStyle={{fontSize:11}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="pv1" stroke="#2196F3" fill="#2196F3" fillOpacity={0.15} name="PV1"/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="pv2" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.15} name="PV2"/>
-          </AreaChart></ResponsiveContainer>}
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            </AreaChart></ResponsiveContainer>}
           {tab==='monthly'&&(monthly.length>0?<ResponsiveContainer><BarChart animationDuration={0} data={monthly.slice().reverse()}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="month" tick={{fontSize:10,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}} formatter={v=>[`${v}kWh`]}/>
             <Bar isAnimationActive={false} dataKey="kwh" fill="#2196F3" radius={[3,3,0,0]}/>
-          </BarChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Need more data for monthly totals.</p>)}
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            </BarChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Need more data for monthly totals.</p>)}
         </div>
       </div>
 
