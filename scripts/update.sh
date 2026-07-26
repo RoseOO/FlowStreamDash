@@ -35,10 +35,13 @@ fi
 
 # ── Pull latest ────────────────────────────────────────────────────
 log "Pulling latest code..."
+# Reset generated files that conflict with clean repo state
+git checkout -- package-lock.json 2>/dev/null || true
+git stash push -- package-lock.json 2>/dev/null || true
 export GIT_TERMINAL_PROMPT=0
 git fetch origin
 CURRENT=$(git rev-parse HEAD)
-git pull origin main || git pull origin master
+git pull --rebase origin main || git pull --rebase origin master || git pull origin main || git pull origin master
 NEW=$(git rev-parse HEAD)
 
 if [[ "$CURRENT" == "$NEW" ]]; then
