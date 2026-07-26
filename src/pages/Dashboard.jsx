@@ -28,7 +28,7 @@ export default function Dashboard() {
     if (devices.length === 0) return;
     Promise.all(devices.map(d => apiFetch(`/data/${d.sn}/latest`).catch(()=>{}))).then(results => {
       const map = {};
-      devices.forEach((d, i) => { map[d.sn] = results[i]?.latest || {}; });
+      devices.forEach((d, i) => { map[d.sn] = { ...(results[i]?.latest || {}), _idle: results[i]?.idle || false }; });
       setSnapshots(map);
     });
   }, [devices.length]);

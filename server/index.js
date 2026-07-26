@@ -447,7 +447,11 @@ app.delete('/api/devices/:sn', authMiddleware, (req, res) => {
 app.get('/api/data/:sn/latest', authMiddleware, (req, res) => {
   const latest = db.getLatestData(req.params.sn);
   const range = db.getDataRange(req.params.sn);
-  res.json({ latest, range });
+  // Include idle status so cold-start shows it immediately
+  const now = Date.now() / 1000;
+  const lastMsg = deviceMsgTimes[req.params.sn] || 0;
+  const idle = (now - lastMsg) > IDLE_TIMEOUT;
+  res.json({ latest, range, idle });
 });
 
 app.get('/api/data/:sn/history', authMiddleware, (req, res) => {

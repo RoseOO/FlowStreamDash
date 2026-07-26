@@ -29,7 +29,7 @@ export default function DeviceDetail() {
     apiFetch('/devices').then(devs => { const d=devs.find(x=>x.sn===sn); if(d)setDevice(d); });
     apiFetch(`/settings/panels/${sn}`).then(setPanelConfig);
     // Fetch latest snapshot so we show data immediately on page load
-    apiFetch(`/data/${sn}/latest`).then(r => setSnapshot(r.latest || {}));
+    apiFetch(`/data/${sn}/latest`).then(r => setSnapshot({ ...(r.latest || {}), _idle: r.idle || false }));
   }, [sn]);
 
   const BASE_FIELDS = [361, 70, 616, 613, 371];
