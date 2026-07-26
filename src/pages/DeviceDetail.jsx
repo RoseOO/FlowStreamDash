@@ -16,6 +16,8 @@ export default function DeviceDetail() {
   const [customGraphFields, setCustomGraphFields] = useState([]);
   const [panelConfig, setPanelConfig] = useState({});
   const [snapshot, setSnapshot] = useState({});
+  const [flashFields, setFlashFields] = useState(new Set());
+  const prevLdRef = useRef({});
 
   // Merge: latest DB snapshot (fills cold-start gaps) + live MQTT data
   const ld = { ...snapshot, ...liveData[sn] };
@@ -55,6 +57,23 @@ export default function DeviceDetail() {
       return next.filter(p=>p.ts>=Date.now()-GRAPH_SECONDS*1000).slice(-500);
     });
   }, [ld._ts, ld[361],ld[70],ld[616],ld[613],ld[371],ld[380],ld[381],ld[442],ld[71],ld[614],ld[615],ld[617],ld[618],ld[638]]);
+
+  // Flash fields that changed on live update
+  useEffect(() => {
+    const changed = [];
+    for (const f of Object.keys(ld)) {
+      if (f === '_ts') continue;
+      if (ld[f] !== prevLdRef.current[f] && ld[f] != null) {
+        changed.push(parseInt(f));
+      }
+    }
+    prevLdRef.current = { ...ld };
+    if (changed.length === 0) return;
+    const newSet = new Set(changed);
+    setFlashFields(newSet);
+    const timer = setTimeout(() => setFlashFields(new Set()), 600);
+    return () => clearTimeout(timer);
+  }, [ld]);
 
   function fmt(v,d=0){return v!=null?v.toFixed(d):'--';}
 
@@ -96,9 +115,9 @@ export default function DeviceDetail() {
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
-              <Line type="monotone" dataKey="f361" stroke="#2196F3" name="PV1" dot={false} strokeWidth={1.5} connectNulls={true}/>
-              <Line type="monotone" dataKey="f70" stroke="#4CAF50" name="PV2" dot={false} strokeWidth={1.5} connectNulls={true}/>
-              <Line type="monotone" dataKey="f616" stroke="#F44336" name="Grid" dot={false} strokeWidth={2} connectNulls={true}/>
+              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f361" stroke="#2196F3" name="PV1" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f70" stroke="#4CAF50" name="PV2" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f616" stroke="#F44336" name="Grid" dot={false} strokeWidth={2} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -108,7 +127,7 @@ export default function DeviceDetail() {
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}} domain={['auto','auto']}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Line type="monotone" dataKey="f613" stroke="#FF9800" name="Voltage" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f613" stroke="#FF9800" name="Voltage" dot={false} strokeWidth={1.5} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -118,7 +137,7 @@ export default function DeviceDetail() {
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Line type="monotone" dataKey="f371" stroke="#E91E63" name="Temp" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f371" stroke="#E91E63" name="Temp" dot={false} strokeWidth={1.5} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -130,7 +149,7 @@ export default function DeviceDetail() {
                 <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
                 <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
                 <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
-                {customGraphFields.map((f,i)=><Line key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
+                {customGraphFields.map((f,i)=><Line isAnimationActive={false} connectNulls={true} key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
               </LineChart>
             </ResponsiveContainer></div>
           </div>
@@ -146,11 +165,16 @@ export default function DeviceDetail() {
             const section=DISPLAY_SECTIONS[f];
             const val=ld[f];
             const selected=customGraphFields.includes(f);
+            const flashing=flashFields.has(f);
             return (
               <React.Fragment key={f}>
                 {section&&<div style={{gridColumn:'1/-1',color:'var(--text-dim)',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.5px',padding:'10px 0 2px',borderBottom:'1px solid var(--border)'}}>{section}</div>}
-                <div onClick={()=>toggleCustomField(f)} style={{display:'flex',justifyContent:'space-between',padding:'3px 8px',borderRadius:4,cursor:'pointer',
-                  background:selected?'rgba(33,150,243,.15)':(val!=null?'var(--bg-card2)':'transparent'),border:selected?'1px solid var(--accent2)':'1px solid transparent'}}>
+                <div onClick={()=>toggleCustomField(f)} style={{
+                  display:'flex',justifyContent:'space-between',padding:'3px 8px',borderRadius:4,cursor:'pointer',
+                  background:flashing?'rgba(76,175,80,.2)':selected?'rgba(33,150,243,.15)':(val!=null?'var(--bg-card2)':'transparent'),
+                  border:flashing?'1px solid rgba(76,175,80,.4)':selected?'1px solid var(--accent2)':'1px solid transparent',
+                  transition:'background .5s ease-out, border .5s ease-out',
+                }}>
                   <span style={{color:'var(--text-dim)'}}>{getFieldLabel(f)}</span>
                   <span style={{fontWeight:600,fontVariantNumeric:'tabular-nums',color:val!=null?'var(--text)':'var(--text-dim)'}}>
                     {formatValue(f,val)} {FIELD_META[f].unit&&<span style={{fontSize:10,color:'var(--text-dim)',fontWeight:400}}>{FIELD_META[f].unit}</span>}

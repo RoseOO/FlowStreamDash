@@ -94,7 +94,7 @@ export default function Stats() {
               <XAxis dataKey="hour" tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Area type="monotone" dataKey="avg" stroke="#2196F3" fill="#2196F3" fillOpacity={0.2} name="Avg Power (W)"/>
+              <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="avg" stroke="#2196F3" fill="#2196F3" fillOpacity={0.2} name="Avg Power (W)"/>
             </AreaChart>
           </ResponsiveContainer></div>
         </div>
@@ -107,7 +107,7 @@ export default function Stats() {
               <XAxis dataKey="date" tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Bar dataKey="kwh" fill="#4CAF50" name="kWh"/>
+              <Bar isAnimationActive={false} dataKey="kwh" fill="#4CAF50" name="kWh"/>
             </BarChart>
           </ResponsiveContainer></div>
         </div>
