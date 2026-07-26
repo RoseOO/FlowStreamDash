@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="32" fill="#0f1117"/>
+  <circle cx="96" cy="88" r="48" fill="#4CAF50" opacity="0.9"/>
+  <text x="96" y="108" text-anchor="middle" font-size="64" fill="#fff" font-family="sans-serif" font-weight="bold">⚡</text>
+  <text x="96" y="156" text-anchor="middle" font-size="16" fill="#4CAF50" font-family="sans-serif">ECOFLOW</text>
+</svg>
