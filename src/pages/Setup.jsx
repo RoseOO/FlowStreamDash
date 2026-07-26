@@ -3,6 +3,7 @@ import { useAuth, useIsAdmin } from '../App';
 import PanelConfig from '../components/PanelConfig';
 import ApiKeyManager from '../components/ApiKeyManager';
 import WeatherConfig from '../components/WeatherConfig';
+import HaMqttConfig from '../components/HaMqttConfig';
 
 export default function Setup({ onLogin, apiFetch }) {
   const auth = useAuth();
@@ -219,6 +220,13 @@ export default function Setup({ onLogin, apiFetch }) {
             <PanelConfig apiFetch={auth.apiFetch} sn={d.sn} />
           </div>
         ))}
+      </div>
+
+      {/* Home Assistant MQTT Bridge */}
+      <div className="card">
+        <h2>Home Assistant MQTT</h2>
+        <p style={{fontSize:13,color:'var(--text-dim)',marginBottom:12}}>Publish live sensor data to your local MQTT broker. Sensors auto-discover in Home Assistant.</p>
+        <HaMqttConfig apiFetch={auth.apiFetch} />
       </div>
 
       {/* User Management (admin only) */}

@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [weather, setWeather] = useState(null);
   const [monthly, setMonthly] = useState([]);
   const [forecast, setForecast] = useState(null);
+  const [health, setHealth] = useState(null);
   const [todayProfile, setTodayProfile] = useState([]);
   const [tab, setTab] = useState('today');
   const [snapshots, setSnapshots] = useState({});
@@ -51,6 +52,8 @@ export default function Dashboard() {
     ]).then(([enhanced, todaySave, monthlyData, panels, weatherData, forecastData]) => {
       setStats(enhanced); setSavings(todaySave); setMonthly(monthlyData||[]);
       setPanelConfig(panels); setWeather(weatherData); setForecast(forecastData);
+      // Also fetch system health
+      apiFetch('/system/health').then(setHealth).catch(()=>{});
       if (enhanced.today?.hourlyProfile) {
         setTodayProfile(Array.from({length:24},(_,h)=>({
           hour:`${h}h`,
@@ -220,6 +223,30 @@ export default function Dashboard() {
             </BarChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Need more data for monthly totals.</p>)}
         </div>
       </div>
+
+      {/* ── System Health ── */}
+      {health && (
+        <div className="card" style={{marginBottom:12,padding:14}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+            <h3 style={{margin:0}}>System Health</h3>
+            <span style={{fontSize:11,color:health.mqttConnected?'var(--accent)':'var(--danger)'}}>{health.mqttConnected?'● MQTT':'○ MQTT Off'}</span>
+            {health.haMqttConnected&&<span style={{fontSize:11,color:'var(--accent)'}}>● HA Bridge</span>}
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8,fontSize:12,color:'var(--text-dim)'}}>
+            <span>Uptime: {health.uptimeDisplay}</span>
+            <span>|</span>
+            <span>DB: {health.dbSizeMb}MB · {health.totalRows?.toLocaleString()} rows</span>
+            <span>|</span>
+            <span>Mem: {health.memoryMb}/{health.memoryTotalMb}MB</span>
+            <span>|</span>
+            <span>Msgs: {health.msgCount?.toLocaleString()}</span>
+            <span>|</span>
+            <span>Disk free: {health.diskFree}</span>
+            <span>|</span>
+            <span>Node {health.nodeVersion}</span>
+          </div>
+        </div>
+      )}
 
       {/* ── Devices ── */}
       <div className="device-list" style={{marginBottom:12}}>

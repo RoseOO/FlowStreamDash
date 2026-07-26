@@ -11,9 +11,11 @@ import { ecoflowLogin } from './auth.js';
 import * as db from './db.js';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, getCsvLabel, formatValue, KNOWN_FIELDS, GRAPH_FIELDS } from './fields.js';
 import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggregator.js';
+import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
 import fs from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = join(__dirname, '..', 'data', 'ecoflow.db');
@@ -1163,6 +1165,90 @@ app.post('/api/settings/weather', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Home Assistant MQTT Bridge ─────────────────────────────
+app.get('/api/settings/ha-mqtt', authMiddleware, (req, res) => {
+  res.json({
+    enabled: db.getSetting('ha_mqtt_enabled') === 'true',
+    host: db.getSetting('ha_mqtt_host') || '',
+    port: parseInt(db.getSetting('ha_mqtt_port') || '1883'),
+    username: db.getSetting('ha_mqtt_username') || '',
+    discovery_prefix: db.getSetting('ha_mqtt_prefix') || 'homeassistant',
+    connected: isHaMqttConnected(),
+  });
+});
+app.post('/api/settings/ha-mqtt', authMiddleware, async (req, res) => {
+  const { enabled, host, port, username, password, discovery_prefix } = req.body;
+  db.setSetting('ha_mqtt_enabled', enabled ? 'true' : 'false');
+  if (host) db.setSetting('ha_mqtt_host', host);
+  if (port) db.setSetting('ha_mqtt_port', String(port));
+  if (username !== undefined) db.setSetting('ha_mqtt_username', username);
+  if (password) db.setSetting('ha_mqtt_password', password);
+  if (discovery_prefix) db.setSetting('ha_mqtt_prefix', discovery_prefix);
+
+  if (enabled && host) {
+    const pwd = password || db.getSetting('ha_mqtt_password') || '';
+    const ok = await startHaMqtt({
+      host, port: parseInt(port||'1883'),
+      username: username || '', password: pwd,
+      discovery_prefix: discovery_prefix || 'homeassistant',
+    });
+    res.json({ success: ok, connected: ok });
+  } else {
+    stopHaMqtt();
+    res.json({ success: true, connected: false });
+  }
+});
+
+// ── System Health ──────────────────────────────────────────
+app.get('/api/system/health', authMiddleware, (req, res) => {
+  const { size: dbStats } = fs.statSync(DB_PATH);
+  const dbSizeMb = (dbStats / 1024 / 1024).toFixed(1);
+  const totalRows = db.default ? db.default.prepare('SELECT COUNT(*) as c FROM data').get().c : 0;
+  const devices = db.getDevices().length;
+  const mem = process.memoryUsage();
+  const uptime = process.uptime();
+  const diskFree = (() => {
+    try {
+      // statfs is Linux-only, fall back gracefully
+      if (typeof fs.statfsSync === 'function') {
+        const s = fs.statfsSync(DB_PATH);
+        return ((s.bsize * s.bavail) / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+      }
+    } catch {}
+    return 'N/A';
+  })();
+
+  res.json({
+    uptime: Math.floor(uptime),
+    uptimeDisplay: `${Math.floor(uptime/86400)}d ${Math.floor(uptime%86400/3600)}h ${Math.floor(uptime%3600/60)}m`,
+    memoryMb: (mem.heapUsed / 1024 / 1024).toFixed(1),
+    memoryTotalMb: (mem.heapTotal / 1024 / 1024).toFixed(1),
+    nodeVersion: process.version,
+    dbSizeMb, totalRows, devices,
+    diskFree,
+    mqttConnected: mqttClient.connected,
+    haMqttConnected: isHaMqttConnected(),
+    msgCount: mqttClient.msgCount,
+  });
+});
+
+// ── Start HA MQTT on startup ──────────────────────────────
+(async () => {
+  const enabled = db.getSetting('ha_mqtt_enabled') === 'true';
+  if (enabled) {
+    const host = db.getSetting('ha_mqtt_host');
+    if (host) {
+      await startHaMqtt({
+        host,
+        port: parseInt(db.getSetting('ha_mqtt_port') || '1883'),
+        username: db.getSetting('ha_mqtt_username') || '',
+        password: db.getSetting('ha_mqtt_password') || '',
+        discovery_prefix: db.getSetting('ha_mqtt_prefix') || 'homeassistant',
+      });
+    }
+  }
+})();
+
 // ── Export Routes ───────────────────────────────────────────
 app.get('/api/export/:sn', authMiddleware, (req, res) => {
   const { from, to } = req.query;
@@ -1259,6 +1345,8 @@ mqttClient.on('data', ({ sn, fields }) => {
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(msg);
   }
+  // Also publish to Home Assistant MQTT if configured
+  publishState(sn, fields, true);
 });
 
 mqttClient.on('state', (state) => {
