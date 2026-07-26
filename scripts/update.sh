@@ -19,6 +19,20 @@ err()  { echo -e "${RED}[ERR]${NC} $1"; exit 1; }
 
 cd "$APP_DIR"
 
+# ── Determine repo location ────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ -d "$APP_DIR/.git" ]]; then
+    cd "$APP_DIR"
+elif [[ -d "$REPO_ROOT/.git" ]]; then
+    # Running from inside the repo — update in place
+    log "Updating from local repo: $REPO_ROOT"
+    cd "$REPO_ROOT"
+else
+    err "App not installed. Run install.sh first."
+fi
+
 # ── Pull latest ────────────────────────────────────────────────────
 log "Pulling latest code..."
 export GIT_TERMINAL_PROMPT=0

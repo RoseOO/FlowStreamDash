@@ -8,7 +8,7 @@ set -euo pipefail
 APP_DIR="/opt/ecoflow-monitor"
 DATA_DIR="/var/lib/ecoflow-monitor"
 SERVICE_NAME="ecoflow-monitor"
-REPO_URL="${REPO_URL:-https://github.com/your-username/ecoflow-monitor.git}"
+REPO_URL="${REPO_URL:-https://github.com/RoseOO/FlowStreamDash.git}"
 NODE_MIN_VERSION=18
 
 RED='\033[0;31m'
@@ -29,16 +29,26 @@ fi
 NODE_MAJOR=$(node -v | sed 's/v//' | cut -d. -f1)
 [[ $NODE_MAJOR -ge $NODE_MIN_VERSION ]] || err "Node.js >= ${NODE_MIN_VERSION} required (found v$(node -v))"
 
-# ── Clone or update repo ───────────────────────────────────────────
-# Uses HTTPS — for public repos no auth needed. For private repos,
-# set up a GitHub token: git config --global credential.helper store
-export GIT_TERMINAL_PROMPT=0
+# ── Clone or copy repo ──────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 if [[ -d "$APP_DIR/.git" ]]; then
-    log "Repository exists, pulling latest..."
+    log "App already installed at $APP_DIR, updating..."
     cd "$APP_DIR"
-    git pull origin main || git pull origin master
+    git pull origin main || git pull origin master || true
+elif [[ -d "$REPO_ROOT/.git" ]]; then
+    # Running from within the repo — copy it
+    log "Installing from local repo: $REPO_ROOT"
+    cp -r "$REPO_ROOT" "$APP_DIR"
+    cd "$APP_DIR"
 else
-    log "Cloning repository..."
+    # Clone fresh
+    if [[ "$REPO_URL" == *"your-username"* ]]; then
+        err "Set REPO_URL environment variable to your actual repo. Example:
+  REPO_URL=https://github.com/you/ecoflow-monitor.git sudo bash install.sh"
+    fi
+    log "Cloning repository from $REPO_URL ..."
     git clone "$REPO_URL" "$APP_DIR"
     cd "$APP_DIR"
 fi
