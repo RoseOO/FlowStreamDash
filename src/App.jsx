@@ -33,6 +33,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('ecoflow_theme') || 'dark');
   const [alerts, setAlerts] = useState([]);
+  const [gridPower, setGridPower] = useState(null);
   const wsRef = useRef(null);
 
   // Theme toggle
@@ -95,6 +96,9 @@ export default function App() {
           }
           setAlerts(prev => [...prev.slice(-4), { ...msg, ts: Date.now() }]);
         }
+        if (msg.type === 'grid' && msg.power_w != null) {
+          setGridPower({ w: msg.power_w, kwh: msg.energy_kwh, ts: msg.ts });
+        }
       } catch {}
     };
     ws.onclose = () => setConnected(false);
@@ -116,7 +120,7 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ token, login, logout, apiFetch }}>
       <AdminContext.Provider value={isAdmin}>
-      <LiveContext.Provider value={{ connected, liveData }}>
+      <LiveContext.Provider value={{ connected, liveData, gridPower }}>
         <div className="app-layout">
           <nav className="navbar">
             <span className="logo">⚡ EcoFlow</span>

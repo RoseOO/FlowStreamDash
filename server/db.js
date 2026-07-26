@@ -100,6 +100,13 @@ db.exec(`
     FOREIGN KEY (device_sn) REFERENCES devices(sn)
   );
 
+  CREATE TABLE IF NOT EXISTS grid_meter_data (
+    ts INTEGER PRIMARY KEY,
+    power_w REAL,
+    energy_kwh REAL
+  );
+  CREATE INDEX IF NOT EXISTS idx_grid_ts ON grid_meter_data(ts);
+
   CREATE TABLE IF NOT EXISTS rates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     valid_from INTEGER NOT NULL,
@@ -190,6 +197,19 @@ export function getAccuracyStats(sn, days=30) {
   return db.prepare(
     'SELECT COUNT(*) as days, AVG(ABS(error_pct)) as avg_abs_error FROM model_accuracy WHERE device_sn=? AND day_ts>=? AND actual_kwh>0'
   ).get(sn, cutoff);
+}
+
+// ── Grid Meter ──────────────────────────────────────────────
+export function insertGridReading(ts, powerW, energyKwh) {
+  db.prepare('INSERT OR REPLACE INTO grid_meter_data (ts, power_w, energy_kwh) VALUES (?,?,?)')
+    .run(ts, powerW, energyKwh);
+}
+export function getGridData(fromTs, toTs) {
+  return db.prepare('SELECT ts, power_w, energy_kwh FROM grid_meter_data WHERE ts>=? AND ts<=? ORDER BY ts ASC')
+    .all(fromTs, toTs);
+}
+export function getLatestGridReading() {
+  return db.prepare('SELECT * FROM grid_meter_data ORDER BY ts DESC LIMIT 1').get();
 }
 
 // MQTT config

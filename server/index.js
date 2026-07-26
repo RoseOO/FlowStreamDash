@@ -12,6 +12,7 @@ import * as db from './db.js';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, getCsvLabel, formatValue, KNOWN_FIELDS, GRAPH_FIELDS } from './fields.js';
 import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggregator.js';
 import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
+import { GridMeter } from './grid-meter.js';
 import fs from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -1244,6 +1245,67 @@ app.get('/api/system/health', authMiddleware, (req, res) => {
         username: db.getSetting('ha_mqtt_username') || '',
         password: db.getSetting('ha_mqtt_password') || '',
         discovery_prefix: db.getSetting('ha_mqtt_prefix') || 'homeassistant',
+      });
+    }
+  }
+})();
+
+// ── Grid Meter (ESPHome Sonoff POWCT) ──────────────────────
+const gridMeter = new GridMeter();
+
+gridMeter.on('data', ({ ts, power_w, energy_kwh }) => {
+  if (power_w != null || energy_kwh != null) {
+    try { db.insertGridReading(ts, power_w, energy_kwh); } catch {}
+  }
+  // Broadcast to WebSocket clients
+  const msg = JSON.stringify({ type: 'grid', ts, power_w, energy_kwh });
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(msg);
+  }
+});
+
+app.get('/api/settings/grid-meter', authMiddleware, (req, res) => {
+  res.json({
+    enabled: db.getSetting('grid_meter_enabled') === 'true',
+    ip: db.getSetting('grid_meter_ip') || '',
+    interval: parseInt(db.getSetting('grid_meter_interval') || '10'),
+    connected: !!gridMeter.lastData,
+    lastPower: gridMeter.lastData?.power_w || null,
+    lastEnergy: gridMeter.lastData?.energy_kwh || null,
+    lastTs: gridMeter.lastData?.ts || null,
+  });
+});
+app.post('/api/settings/grid-meter', authMiddleware, (req, res) => {
+  const { enabled, ip, interval } = req.body;
+  db.setSetting('grid_meter_enabled', enabled ? 'true' : 'false');
+  if (ip) db.setSetting('grid_meter_ip', ip);
+  if (interval) db.setSetting('grid_meter_interval', String(interval));
+  if (enabled && ip) {
+    gridMeter.configure({ enabled: true, ip, interval: parseInt(interval||'10') });
+  } else {
+    gridMeter.stop();
+  }
+  res.json({ success: true });
+});
+app.get('/api/grid-meter/latest', authMiddleware, (req, res) => {
+  const latest = db.getLatestGridReading();
+  res.json(latest || { power_w: null, energy_kwh: null });
+});
+app.get('/api/grid-meter/history', authMiddleware, (req, res) => {
+  const { from, to } = req.query;
+  const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-86400);
+  const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
+  res.json(db.getGridData(fromTs, toTs));
+});
+
+// Auto-start grid meter on startup
+(async () => {
+  if (db.getSetting('grid_meter_enabled') === 'true') {
+    const ip = db.getSetting('grid_meter_ip');
+    if (ip) {
+      gridMeter.configure({
+        enabled: true, ip,
+        interval: parseInt(db.getSetting('grid_meter_interval') || '10'),
       });
     }
   }

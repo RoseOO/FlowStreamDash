@@ -4,6 +4,7 @@ import PanelConfig from '../components/PanelConfig';
 import ApiKeyManager from '../components/ApiKeyManager';
 import WeatherConfig from '../components/WeatherConfig';
 import HaMqttConfig from '../components/HaMqttConfig';
+import GridMeterConfig from '../components/GridMeterConfig';
 
 export default function Setup({ onLogin, apiFetch }) {
   const auth = useAuth();
@@ -227,6 +228,13 @@ export default function Setup({ onLogin, apiFetch }) {
         <h2>Home Assistant MQTT</h2>
         <p style={{fontSize:13,color:'var(--text-dim)',marginBottom:12}}>Publish live sensor data to your local MQTT broker. Sensors auto-discover in Home Assistant.</p>
         <HaMqttConfig apiFetch={auth.apiFetch} />
+      </div>
+
+      {/* Grid Meter (ESPHome) */}
+      <div className="card">
+        <h2>Grid Meter</h2>
+        <p style={{fontSize:13,color:'var(--text-dim)',marginBottom:12}}>Connect an ESPHome Sonoff POW Ring to get real grid import/export data for accurate savings.</p>
+        <GridMeterConfig apiFetch={auth.apiFetch} />
       </div>
 
       {/* User Management (admin only) */}
