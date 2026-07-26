@@ -112,6 +112,8 @@ a:hover { text-decoration: underline; }
 .recharts-brush rect:focus, .recharts-brush-slide:focus, .recharts-wrapper svg *:focus { outline: none !important; }
 .recharts-brush rect { outline: none; }
 .recharts-brush-texts text { font-size: 10px; fill: var(--text-dim); }
+.recharts-wrapper, .recharts-surface, .recharts-wrapper svg, .recharts-responsive-container { outline: none !important; }
+.recharts-wrapper:focus, .recharts-wrapper:focus-visible, svg:focus, svg:focus-visible { outline: none !important; }
 
 /* Loading */
 .loading { text-align: center; padding: 30px; color: var(--text-dim); }
