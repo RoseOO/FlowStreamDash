@@ -128,7 +128,7 @@ export default function History() {
                 <Legend/>
                 {selectedFields.map((f,i)=>{
                   const label = f===901?'PV1 Efficiency %':f===902?'PV2 Efficiency %':getFieldLabel(f);
-                  return <Line isAnimationActive={false} connectNulls={true} key={f} type="monotone" dataKey={`f${f}`}
+                  return <Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`}
                     stroke={colors[i%colors.length]} name={label} dot={false}
                     strokeWidth={1.5} connectNulls={true}/>
                 })}
