@@ -932,7 +932,6 @@ app.get('/api/settings/weather', authMiddleware, (req, res) => {
     lon: db.getSetting('weather_lon') || DEFAULT_LON,
   });
 });
-});
 app.post('/api/settings/weather', authMiddleware, (req, res) => {
   if (req.body.lat) db.setSetting('weather_lat', String(req.body.lat));
   if (req.body.lon) db.setSetting('weather_lon', String(req.body.lon));
