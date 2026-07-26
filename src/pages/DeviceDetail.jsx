@@ -23,10 +23,14 @@ export default function DeviceDetail() {
     apiFetch(`/settings/panels/${sn}`).then(setPanelConfig);
   }, [sn]);
 
-  // Fetch history
+  const BASE_FIELDS = [361, 70, 616, 613, 371];
+  const allGraphFields = [...new Set([...BASE_FIELDS, ...customGraphFields])];
+
+  // Fetch history for all fields we need to graph
   useEffect(() => {
     const now = Math.floor(Date.now()/1000);
-    apiFetch(`/data/${sn}/history?from=${now-GRAPH_SECONDS}&fields=361,70,616,613,371`)
+    const fieldList = allGraphFields.join(',');
+    apiFetch(`/data/${sn}/history?from=${now-GRAPH_SECONDS}&fields=${fieldList}`)
       .then(rows => {
         const byTs={};
         for(const r of rows){
@@ -35,17 +39,18 @@ export default function DeviceDetail() {
         }
         setHistory(Object.values(byTs).sort((a,b)=>a.ts-b.ts));
       });
-  }, [sn]);
+  }, [sn, customGraphFields.join(',')]);
 
-  // Merge live
+  // Merge live data including all graph fields
   useEffect(() => {
     if(!ld._ts)return;
     setHistory(prev=>{
-      const pt={ts:ld._ts*1000,f361:ld[361],f70:ld[70],f616:ld[616],f613:ld[613],f371:ld[371]};
+      const pt={ts:ld._ts*1000};
+      for(const f of allGraphFields) pt[`f${f}`]=ld[f];
       const next=[...prev,pt];
       return next.filter(p=>p.ts>=Date.now()-GRAPH_SECONDS*1000).slice(-500);
     });
-  }, [ld._ts,ld[361],ld[70],ld[616],ld[613],ld[371]]);
+  }, [ld._ts, ld[361],ld[70],ld[616],ld[613],ld[371],ld[380],ld[381],ld[442],ld[71],ld[614],ld[615],ld[617],ld[618],ld[638]]);
 
   function fmt(v,d=0){return v!=null?v.toFixed(d):'--';}
 
