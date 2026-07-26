@@ -121,9 +121,9 @@ export default function DeviceDetail() {
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
-              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f361" stroke="#2196F3" name="PV1" dot={false} strokeWidth={1.5} connectNulls={true}/>
-              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f70" stroke="#4CAF50" name="PV2" dot={false} strokeWidth={1.5} connectNulls={true}/>
-              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f616" stroke="#F44336" name="Grid" dot={false} strokeWidth={2} connectNulls={true}/>
+              <Line isAnimationActive={false} type="monotone" dataKey="f361" stroke="#2196F3" name="PV1" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} type="monotone" dataKey="f70" stroke="#4CAF50" name="PV2" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} type="monotone" dataKey="f616" stroke="#F44336" name="Grid" dot={false} strokeWidth={2} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -133,7 +133,7 @@ export default function DeviceDetail() {
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}} domain={['auto','auto']}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f613" stroke="#FF9800" name="Voltage" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} type="monotone" dataKey="f613" stroke="#FF9800" name="Voltage" dot={false} strokeWidth={1.5} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -143,7 +143,7 @@ export default function DeviceDetail() {
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="f371" stroke="#E91E63" name="Temp" dot={false} strokeWidth={1.5} connectNulls={true}/>
+              <Line isAnimationActive={false} type="monotone" dataKey="f371" stroke="#E91E63" name="Temp" dot={false} strokeWidth={1.5} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -155,7 +155,7 @@ export default function DeviceDetail() {
                 <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
                 <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
                 <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
-                {customGraphFields.map((f,i)=><Line isAnimationActive={false} connectNulls={true} key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
+                {customGraphFields.map((f,i)=><Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
               </LineChart>
             </ResponsiveContainer></div>
           </div>

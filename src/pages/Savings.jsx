@@ -106,7 +106,7 @@ export default function Savings() {
             <LineChart animationDuration={0} data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="date" tick={{fontSize:11,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
-              <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="totalSaving" stroke="#4CAF50" name="Cumulative £" strokeWidth={2} dot={false} connectNulls={true}/>
+              <Line isAnimationActive={false} type="monotone" dataKey="totalSaving" stroke="#4CAF50" name="Cumulative £" strokeWidth={2} dot={false} connectNulls={true}/>
             </LineChart>
           </ResponsiveContainer></div>
         </div>
