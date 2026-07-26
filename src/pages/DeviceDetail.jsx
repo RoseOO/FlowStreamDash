@@ -157,7 +157,7 @@ export default function DeviceDetail() {
               <Line isAnimationActive={false} type="monotone" dataKey="f361" stroke="#2196F3" name="PV1" dot={false} strokeWidth={1.5} connectNulls={true}/>
               <Line isAnimationActive={false} type="monotone" dataKey="f70" stroke="#4CAF50" name="PV2" dot={false} strokeWidth={1.5} connectNulls={true}/>
               <Line isAnimationActive={false} type="monotone" dataKey="f616" stroke="#F44336" name="Grid" dot={false} strokeWidth={2} connectNulls={true}/>
-            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -168,7 +168,7 @@ export default function DeviceDetail() {
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}} domain={['auto','auto']}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
               <Line isAnimationActive={false} type="monotone" dataKey="f613" stroke="#FF9800" name="Voltage" dot={false} strokeWidth={1.5} connectNulls={true}/>
-            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -179,7 +179,7 @@ export default function DeviceDetail() {
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
               <Line isAnimationActive={false} type="monotone" dataKey="f371" stroke="#E91E63" name="Temp" dot={false} strokeWidth={1.5} connectNulls={true}/>
-            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+            <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </LineChart>
           </ResponsiveContainer></div>
         </div>
@@ -192,7 +192,7 @@ export default function DeviceDetail() {
                 <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
                 <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
                 {customGraphFields.map((f,i)=><Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
-              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </LineChart>
             </ResponsiveContainer></div>
           </div>

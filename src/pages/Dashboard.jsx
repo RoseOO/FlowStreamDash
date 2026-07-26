@@ -197,26 +197,26 @@ export default function Dashboard() {
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend wrapperStyle={{fontSize:11}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="today" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.2} name="Today"/>
             <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="yesterday" stroke="#8890a5" strokeDasharray="6 3" name="Yesterday" dot={false}/>
-          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </ComposedChart></ResponsiveContainer>}
           {tab==='weather'&&(weather?<ResponsiveContainer><AreaChart animationDuration={0} data={weather.map(w=>({hour:`${w.hour}h`,cloud:w.cloudCover}))}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}} domain={[0,100]}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="cloud" stroke="#607D8B" fill="#607D8B" fillOpacity={0.25} name="Cloud %"/>
-          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </AreaChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Set lat/lon in Setup ☀ Weather for cloud data</p>)}
           {tab==='compare'&&todayProfile.length>0&&<ResponsiveContainer><AreaChart animationDuration={0} data={todayProfile}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend wrapperStyle={{fontSize:11}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="pv1" stroke="#2196F3" fill="#2196F3" fillOpacity={0.15} name="PV1"/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="pv2" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.15} name="PV2"/>
-          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </AreaChart></ResponsiveContainer>}
           {tab==='monthly'&&(monthly.length>0?<ResponsiveContainer><BarChart animationDuration={0} data={monthly.slice().reverse()}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="month" tick={{fontSize:10,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}} formatter={v=>[`${v}kWh`]}/>
             <Bar isAnimationActive={false} dataKey="kwh" fill="#2196F3" radius={[3,3,0,0]}/>
-          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+          <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </BarChart></ResponsiveContainer>:<p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Need more data for monthly totals.</p>)}
         </div>
       </div>

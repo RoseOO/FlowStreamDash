@@ -150,7 +150,7 @@ export default function History() {
                     stroke={colors[i%colors.length]} name={label} dot={false}
                     strokeWidth={1.5} connectNulls={true}/>
                 })}
-              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} />
+              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </LineChart>
             </ResponsiveContainer>
           </div>
