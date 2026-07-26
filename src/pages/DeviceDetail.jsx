@@ -92,7 +92,7 @@ export default function DeviceDetail() {
       <div className="grid-2" style={{marginBottom:16}}>
         <div className="card"><h3>PV & Grid Power (W)</h3>
           <div className="chart-container"><ResponsiveContainer>
-            <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <LineChart animationDuration={0} data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
@@ -104,7 +104,7 @@ export default function DeviceDetail() {
         </div>
         <div className="card"><h3>Grid Voltage (V)</h3>
           <div className="chart-container"><ResponsiveContainer>
-            <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <LineChart animationDuration={0} data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}} domain={['auto','auto']}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
@@ -114,7 +114,7 @@ export default function DeviceDetail() {
         </div>
         <div className="card"><h3>Inverter Temperature (°C)</h3>
           <div className="chart-container"><ResponsiveContainer>
-            <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <LineChart animationDuration={0} data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
@@ -126,7 +126,7 @@ export default function DeviceDetail() {
         {customGraphFields.length>0&&(
           <div className="card"><h3>Selected Fields {customGraphFields.map(f=>(<span key={f} style={{fontSize:11,marginLeft:6,color:'var(--text-dim)',cursor:'pointer'}} onClick={()=>toggleCustomField(f)}>✕ {getFieldLabel(f)}</span>))}</h3>
             <div className="chart-container"><ResponsiveContainer>
-              <LineChart data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+              <LineChart animationDuration={0} data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                 <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
                 <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
                 <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>

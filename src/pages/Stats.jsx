@@ -90,7 +90,7 @@ export default function Stats() {
         <div className="card" style={{marginBottom:16}}>
           <h3>Generation Profile by Hour</h3>
           <div style={{width:'100%',height:300}}><ResponsiveContainer>
-            <AreaChart data={profileData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <AreaChart animationDuration={0} data={profileData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="hour" tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
@@ -103,7 +103,7 @@ export default function Stats() {
         <div className="card">
           <h3>Daily Production (kWh)</h3>
           <div style={{width:'100%',height:300}}><ResponsiveContainer>
-            <BarChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <BarChart animationDuration={0} data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="date" tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>

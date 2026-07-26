@@ -118,7 +118,7 @@ export default function History() {
           chartDataWithEff.length===0?<p style={{color:'var(--text-dim)',textAlign:'center',padding:40}}>No data for this period yet. Keep monitoring for a while and data will accumulate.</p>:
           <div style={{width:'100%',height:400}}>
             <ResponsiveContainer>
-              <LineChart data={chartDataWithEff}>
+              <LineChart animationDuration={0} data={chartDataWithEff}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                 <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}}
                   tickFormatter={ts=>new Date(ts).toLocaleString().slice(0, range==='1h'?5:16)}/>

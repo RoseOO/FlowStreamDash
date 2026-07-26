@@ -93,7 +93,7 @@ export default function Savings() {
       {dailyData.length>0&&<>
         <div className="card"><h3>Daily Solar Production (kWh)</h3>
           <div style={{width:'100%',height:350}}><ResponsiveContainer>
-            <BarChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <BarChart animationDuration={0} data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="date" tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
@@ -103,7 +103,7 @@ export default function Savings() {
         </div>
         <div className="card"><h3>Cumulative Saving (£)</h3>
           <div style={{width:'100%',height:300}}><ResponsiveContainer>
-            <LineChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+            <LineChart animationDuration={0} data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="date" tick={{fontSize:11,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
               <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
               <Line type="monotone" dataKey="totalSaving" stroke="#4CAF50" name="Cumulative £" strokeWidth={2} dot={false} connectNulls={true}/>
