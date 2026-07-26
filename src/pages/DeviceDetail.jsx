@@ -15,12 +15,16 @@ export default function DeviceDetail() {
   const [device, setDevice] = useState(null);
   const [customGraphFields, setCustomGraphFields] = useState([]);
   const [panelConfig, setPanelConfig] = useState({});
+  const [snapshot, setSnapshot] = useState({});
 
-  const ld = liveData[sn] || {};
+  // Merge: latest DB snapshot (fills cold-start gaps) + live MQTT data
+  const ld = { ...snapshot, ...liveData[sn] };
 
   useEffect(() => {
     apiFetch('/devices').then(devs => { const d=devs.find(x=>x.sn===sn); if(d)setDevice(d); });
     apiFetch(`/settings/panels/${sn}`).then(setPanelConfig);
+    // Fetch latest snapshot so we show data immediately on page load
+    apiFetch(`/data/${sn}/latest`).then(r => setSnapshot(r.latest || {}));
   }, [sn]);
 
   const BASE_FIELDS = [361, 70, 616, 613, 371];

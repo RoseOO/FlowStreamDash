@@ -29,7 +29,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [liveData, setLiveData] = useState({});
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem('ecoflow_theme') || 'dark');
   const wsRef = useRef(null);
+
+  // Theme toggle
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => { const t = prev === 'dark' ? 'light' : 'dark'; localStorage.setItem('ecoflow_theme', t); return t; });
+  }, []);
+  useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
 
   // Auth helpers
   const login = useCallback((t) => { localStorage.setItem('ecoflow_token', t); setToken(t); }, []);
@@ -95,17 +103,37 @@ export default function App() {
       <LiveContext.Provider value={{ connected, liveData }}>
         <div className="app-layout">
           <nav className="navbar">
-            <span className="logo">⚡ EcoFlow Monitor</span>
+            <span className="logo">⚡ EcoFlow</span>
             <span className={`status-dot ${connected ? 'on' : 'off'}`} title={connected ? 'Connected' : 'Disconnected'}></span>
-            <NavLink to="/">Dashboard</NavLink>
-            <NavLink to="/history">History</NavLink>
-            <NavLink to="/savings">Savings</NavLink>
-            <NavLink to="/stats">Stats</NavLink>
-            <NavLink to="/apidocs">API</NavLink>
-            <NavLink to="/export">Export</NavLink>
-            <NavLink to="/setup">Setup</NavLink>
-            <button className="btn btn-sm btn-danger" onClick={logout} style={{marginLeft:'auto'}}>Logout</button>
+            <button className="theme-btn" onClick={toggleTheme} title="Toggle theme">{theme==='dark'?'☀':'🌙'}</button>
+            <div className="nav-links">
+              <NavLink to="/">Dashboard</NavLink>
+              <NavLink to="/history">History</NavLink>
+              <NavLink to="/savings">Savings</NavLink>
+              <NavLink to="/stats">Stats</NavLink>
+              <NavLink to="/apidocs">API</NavLink>
+              <NavLink to="/export">Export</NavLink>
+              <NavLink to="/setup">Setup</NavLink>
+            </div>
+            <button className="btn btn-sm btn-danger hide-mobile" onClick={logout}>Logout</button>
+            <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>
+              {menuOpen ? '✕' : '☰'}
+            </button>
           </nav>
+
+          {menuOpen && (
+            <div className={`mobile-menu ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
+              <NavLink to="/">Dashboard</NavLink>
+              <NavLink to="/history">History</NavLink>
+              <NavLink to="/savings">Savings</NavLink>
+              <NavLink to="/stats">Stats</NavLink>
+              <NavLink to="/apidocs">API Docs</NavLink>
+              <NavLink to="/export">Export</NavLink>
+              <NavLink to="/setup">Setup</NavLink>
+              <button onClick={logout} style={{color:'var(--danger)',marginTop:8}}>Logout</button>
+            </div>
+          )}
+
           <div className="content">
             <Routes>
               <Route path="/" element={<Dashboard />} />

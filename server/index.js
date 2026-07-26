@@ -676,6 +676,147 @@ app.post('/api/settings/panels/:sn', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Enhanced Stats (yesterday, CO2, monthly, best day) ─────
+const CO2_KG_PER_KWH = 0.233; // UK grid average
+
+app.get('/api/stats/:sn/enhanced', authMiddleware, (req, res) => {
+  const { from, to } = req.query;
+  const now = Math.floor(Date.now()/1000);
+  const todayStart = Math.floor(now/86400)*86400;
+  const yesterdayStart = todayStart - 86400;
+  const fromTs = from ? parseInt(from) : todayStart;
+  const toTs = to ? parseInt(to) : now;
+
+  const today = getStats(req.params.sn, todayStart, now);
+  const yesterday = getStats(req.params.sn, yesterdayStart, todayStart);
+  const rangeStats = getStats(req.params.sn, fromTs, toTs);
+
+  // CO2
+  const co2Kg = round2(today.totalKwh * CO2_KG_PER_KWH);
+  const co2TotalKg = round2(rangeStats.totalKwh * CO2_KG_PER_KWH);
+
+  // Comparison
+  const vsYesterday = yesterday.totalKwh > 0 ? round2((today.totalKwh - yesterday.totalKwh) / yesterday.totalKwh * 100) : null;
+
+  // Best day of all time
+  const allTime = db.default.prepare(
+    `SELECT ts, SUM(value_num*2)/3600000 as kwh FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0 GROUP BY (ts/86400) ORDER BY kwh DESC LIMIT 1`
+  ).get(req.params.sn);
+  const bestDay = allTime ? { date: allTime.ts, kwh: round2(allTime.kwh) } : null;
+
+  // Consecutive days streak
+  const days = db.default.prepare(
+    `SELECT DISTINCT CAST(ts/86400 AS INTEGER) as day FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num > 0 ORDER BY day DESC LIMIT 365`
+  ).all(req.params.sn);
+  let streak=0;
+  for(let i=0;i<days.length-1;i++){
+    if(days[i].day-days[i+1].day===1)streak++;
+    else break;
+  }
+  streak=Math.max(0,streak);
+
+  res.json({
+    today,
+    yesterday,
+    vsYesterdayPct: vsYesterday,
+    co2SavingKgToday: co2Kg,
+    co2SavingKgTotal: co2TotalKg,
+    co2PerKwh: CO2_KG_PER_KWH,
+    bestDayAllTime: bestDay,
+    generationStreak: streak,
+    ...rangeStats,
+  });
+});
+
+// Monthly aggregates
+app.get('/api/stats/:sn/monthly', authMiddleware, (req, res) => {
+  const rows = db.default.prepare(
+    `SELECT CAST(ts/86400 AS INTEGER)/30 as month_block, SUM(value_num*2)/3600000 as kwh, MAX(value_num) as peak
+     FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0
+     GROUP BY month_block ORDER BY month_block DESC LIMIT 24`
+  ).all(req.params.sn);
+  res.json(rows.map(r => ({
+    month: new Date(r.month_block*30*86400*1000).toLocaleDateString('en',{year:'numeric',month:'short'}),
+    kwh: round2(r.kwh), peakW: round2(r.peak),
+  })));
+});
+
+// Weather proxy (Open-Meteo free API)
+app.get('/api/weather', authMiddleware, (req, res) => {
+  const lat = req.query.lat || db.getSetting('weather_lat') || '51.5';
+  const lon = req.query.lon || db.getSetting('weather_lon') || '-0.13';
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloud_cover,shortwave_radiation&timezone=auto&forecast_days=1`;
+  fetch(url).then(r=>r.json()).then(data => {
+    const now = new Date();
+    const hours = data.hourly?.time?.map((t,i) => ({
+      hour: new Date(t).getHours(),
+      cloudCover: data.hourly.cloud_cover?.[i],
+      radiation: data.hourly.shortwave_radiation?.[i],
+    })).filter(h => h.hour <= now.getHours()) || [];
+    res.json(hours);
+  }).catch(e => res.status(500).json({ error: e.message }));
+});
+
+// Generation forecast: historical hourly profile × cloud cover adjustment
+app.get('/api/forecast/:sn', authMiddleware, (req, res) => {
+  const now = Math.floor(Date.now()/1000);
+  const todayStart = Math.floor(now/86400)*86400;
+  // Get today's hourly profile so far + historical averages
+  const stats = getStats(req.params.sn, todayStart - 7*86400, now);
+  if (!stats.hourlyProfile) return res.json({ error: 'Not enough historical data' });
+
+  const lat = db.getSetting('weather_lat') || '51.5';
+  const lon = db.getSetting('weather_lon') || '-0.13';
+  const currentHour = new Date().getHours();
+  const remainingHours = 23 - currentHour;
+
+  // Fetch weather forecast for remaining hours
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloud_cover&timezone=auto&forecast_days=1`;
+  fetch(url).then(r=>r.json()).then(data => {
+    const cloudMap = {};
+    if (data.hourly) {
+      data.hourly.time.forEach((t, i) => {
+        const h = new Date(t).getHours();
+        if (h > currentHour) cloudMap[h] = data.hourly.cloud_cover[i] || 0;
+      });
+    }
+
+    let predictedRemainingKwh = 0;
+    for (let h = currentHour + 1; h <= 23; h++) {
+      const histAvg = stats.hourlyProfile[h]?.avg || 0;
+      const cloud = cloudMap[h] !== undefined ? cloudMap[h] : 50; // default 50% if no data
+      // Reduce by cloud cover: 0% cloud = 100% of historical, 100% cloud = ~20% of historical
+      const factor = Math.max(0.2, 1 - (cloud / 100) * 0.8);
+      predictedRemainingKwh += (histAvg * factor) / 1000; // watts → kWh per hour
+    }
+
+    res.json({
+      currentHour,
+      remainingHours,
+      historicalAvgW: Object.fromEntries(
+        Array.from({length:24},(_,h) => [h, stats.hourlyProfile[h]?.avg||0])
+      ),
+      cloudCoverPct: cloudMap,
+      predictedRemainingKwh: round2(predictedRemainingKwh),
+      alreadyProducedKwh: stats.totalKwh || 0,
+      predictedTotalKwh: round2((stats.totalKwh||0) + predictedRemainingKwh),
+    });
+  }).catch(e => res.status(500).json({ error: e.message }));
+});
+
+// Weather location settings
+app.get('/api/settings/weather', authMiddleware, (req, res) => {
+  res.json({
+    lat: db.getSetting('weather_lat') || '51.5',
+    lon: db.getSetting('weather_lon') || '-0.13',
+  });
+});
+app.post('/api/settings/weather', authMiddleware, (req, res) => {
+  if (req.body.lat) db.setSetting('weather_lat', String(req.body.lat));
+  if (req.body.lon) db.setSetting('weather_lon', String(req.body.lon));
+  res.json({ success: true });
+});
+
 // ── Export Routes ───────────────────────────────────────────
 app.get('/api/export/:sn', authMiddleware, (req, res) => {
   const { from, to } = req.query;

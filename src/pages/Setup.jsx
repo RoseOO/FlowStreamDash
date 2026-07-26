@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, useIsAdmin } from '../App';
 import PanelConfig from '../components/PanelConfig';
 import ApiKeyManager from '../components/ApiKeyManager';
+import WeatherConfig from '../components/WeatherConfig';
 
 export default function Setup({ onLogin, apiFetch }) {
   const auth = useAuth();
@@ -198,6 +199,13 @@ export default function Setup({ onLogin, apiFetch }) {
             <button className="btn btn-danger btn-sm" onClick={()=>removeDevice(d.sn)}>Remove</button>
           </div>
         ))}
+      </div>
+
+      {/* Weather Location */}
+      <div className="card">
+        <h2>Weather Location</h2>
+        <p style={{fontSize:13,color:'var(--text-dim)',marginBottom:12}}>Set your latitude/longitude for cloud cover data and generation forecasts.</p>
+        <WeatherConfig apiFetch={auth.apiFetch} />
       </div>
 
       {/* Panel Wattage Config */}
