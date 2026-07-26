@@ -1058,8 +1058,16 @@ function restartMqtt() {
 }
 
 // ── Data logger ─────────────────────────────────────────────
+const deviceMsgTimes = {}; // sn -> timestamp of last real MQTT message
+const deviceLastPower = {}; // sn -> was there generation in last message?
+
 mqttClient.on('data', ({ sn, fields }) => {
   const ts = Math.floor(Date.now() / 1000);
+  deviceMsgTimes[sn] = ts;
+  // Track if we had actual generation
+  const hasPower = (fields[361] > 0 || fields[70] > 0 || fields[616] !== 0);
+  if (hasPower) deviceLastPower[sn] = ts;
+
   const rows = [];
   for (const [fnum, value] of Object.entries(fields)) {
     const fieldNum = parseInt(fnum);
@@ -1185,6 +1193,29 @@ setInterval(() => {
     if (idle > 45) {
       console.log(`[MQTT] No data for ${Math.round(idle)}s — reconnecting`);
       restartMqtt();
+    }
+  }
+}, 5000);
+
+// ── Device idle detection ──────────────────────────────────
+// When a device stops sending MQTT (no generation at night/cloud),
+// emit synthetic zeros for power fields so the UI updates.
+const POWER_FIELDS = [361, 70, 616]; // PV1, PV2, Grid
+const IDLE_TIMEOUT = 120; // seconds without data before we zero out
+setInterval(() => {
+  const now = Date.now() / 1000;
+  for (const sn of Object.keys(deviceMsgTimes)) {
+    const idle = now - deviceMsgTimes[sn];
+    if (idle > IDLE_TIMEOUT) {
+      // Don't spam — only emit zero if the last values weren't already zero
+      const zeros = {};
+      for (const f of POWER_FIELDS) zeros[f] = 0;
+      const msg = JSON.stringify({ type: 'data', sn, fields: zeros, ts: Math.floor(now), idle: true });
+      for (const client of wss.clients) {
+        if (client.readyState === 1) client.send(msg);
+      }
+      // Reset timer so we don't emit every 5 seconds
+      deviceMsgTimes[sn] = now - IDLE_TIMEOUT + 60; // emit every 60s when idle
     }
   }
 }, 5000);

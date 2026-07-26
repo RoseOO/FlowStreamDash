@@ -58,12 +58,13 @@ export default function DeviceDetail() {
     });
   }, [ld._ts, ld[361],ld[70],ld[616],ld[613],ld[371],ld[380],ld[381],ld[442],ld[71],ld[614],ld[615],ld[617],ld[618],ld[638]]);
 
-  // Flash fields that changed on live update
+  // Flash fields that changed on live update (skip idle zeros)
   useEffect(() => {
+    if (ld._idle) return;
     const changed = [];
     for (const f of Object.keys(ld)) {
-      if (f === '_ts') continue;
-      if (ld[f] !== prevLdRef.current[f] && ld[f] != null) {
+      if (f === '_ts' || f === '_idle') continue;
+      if (ld[f] !== prevLdRef.current[f] && ld[f] != null && prevLdRef.current[f] !== undefined) {
         changed.push(parseInt(f));
       }
     }

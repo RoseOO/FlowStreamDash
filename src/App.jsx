@@ -77,7 +77,7 @@ export default function App() {
         if (msg.type === 'data' && msg.sn && msg.fields) {
           setLiveData(prev => {
             const prevDev = prev[msg.sn] || {};
-            return { ...prev, [msg.sn]: { ...prevDev, ...msg.fields, _ts: msg.ts } };
+            return { ...prev, [msg.sn]: { ...prevDev, ...msg.fields, _ts: msg.ts, _idle: msg.idle || false } };
           });
         }
       } catch {}

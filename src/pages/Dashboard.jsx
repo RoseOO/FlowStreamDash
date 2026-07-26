@@ -222,11 +222,16 @@ export default function Dashboard() {
         {devices.map(d=>{
           const ld=getDeviceData(d.sn);
           const pv1=ld[361]||0,pv2=ld[70]||0,grid=ld[616]||0,temp=ld[371],volt=ld[613];
+          const isIdle = ld._idle || false;
+          const totalPower = pv1 + pv2;
           return (
             <div key={d.sn} className="device-card" onClick={()=>navigate(`/device/${d.sn}`)}>
-              <div className="sn">{d.sn}</div><div className="name">{d.name||d.sn}</div>
-              <div className="power" style={{color:'var(--pv2)'}}>{(pv1+pv2).toFixed(0)}<span style={{fontSize:14,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
-              <div className="meta">{pv1>0&&<span style={{color:'var(--pv1)'}}>☀ PV1 {fmt(pv1,0)}W</span>}{pv2>0&&<span style={{color:'var(--pv2)'}}>☀ PV2 {fmt(pv2,0)}W</span>}</div>
+              <div className="sn">{d.sn}{isIdle&&<span style={{marginLeft:8,fontSize:10,color:'var(--text-dim)',fontStyle:'italic'}}>Idle</span>}</div>
+              <div className="name">{d.name||d.sn}</div>
+              <div className="power" style={{color:isIdle?'var(--text-dim)':'var(--pv2)'}}>
+                {totalPower>0?totalPower.toFixed(0):'--'}<span style={{fontSize:14,fontWeight:400,color:'var(--text-dim)'}}>{totalPower>0?'W':'Stopped'}</span>
+              </div>
+              <div className="meta">{totalPower>0&&<>{pv1>0&&<span style={{color:'var(--pv1)'}}>☀ PV1 {fmt(pv1,0)}W</span>}{pv2>0&&<span style={{color:'var(--pv2)'}}>☀ PV2 {fmt(pv2,0)}W</span>}</>}</div>
               <div className="meta" style={{marginTop:4}}>{grid!==0&&<span>⚡ {fmt(grid,0)}W</span>}{temp>0&&<span>🌡 {fmt(temp,1)}°C</span>}{volt>0&&<span>🔌 {fmt(volt,0)}V</span>}</div>
             </div>
           );
