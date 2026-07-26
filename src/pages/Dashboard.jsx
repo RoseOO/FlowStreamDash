@@ -18,9 +18,24 @@ export default function Dashboard() {
   const [forecast, setForecast] = useState(null);
   const [todayProfile, setTodayProfile] = useState([]);
   const [tab, setTab] = useState('today');
+  const [snapshots, setSnapshots] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => { apiFetch('/devices').then(setDevices).finally(() => setLoading(false)); }, []);
+
+  // Fetch latest snapshot for all devices (cold-start data)
+  useEffect(() => {
+    if (devices.length === 0) return;
+    Promise.all(devices.map(d => apiFetch(`/data/${d.sn}/latest`).catch(()=>{}))).then(results => {
+      const map = {};
+      devices.forEach((d, i) => { map[d.sn] = results[i]?.latest || {}; });
+      setSnapshots(map);
+    });
+  }, [devices.length]);
+
+  function getDeviceData(sn) {
+    return { ...(snapshots[sn] || {}), ...(liveData[sn] || {}) };
+  }
 
   useEffect(() => {
     if (devices.length === 0) return;
@@ -57,10 +72,10 @@ export default function Dashboard() {
   );
 
   let livePV=0;
-  for(const d of devices){const ld=liveData[d.sn]||{};livePV+=(ld[361]||0)+(ld[70]||0);}
+  for(const d of devices){const ld=getDeviceData(d.sn);livePV+=(ld[361]||0)+(ld[70]||0);}
   const pv1Rated=parseInt(panelConfig.pv1_rated_watts)||0;
   const pv2Rated=parseInt(panelConfig.pv2_rated_watts)||0;
-  const d=liveData[devices[0]?.sn]||{};
+  const d=getDeviceData(devices[0]?.sn);
   const pv1=d[361]||0,pv1v=d[380],pv1a=d[381];
   const pv2=d[70]||0,pv2v=d[442],pv2a=d[71];
   const grid=d[616]||0,temp=d[371],volt=d[613];
@@ -205,7 +220,7 @@ export default function Dashboard() {
       {/* ── Devices ── */}
       <div className="device-list" style={{marginBottom:12}}>
         {devices.map(d=>{
-          const ld=liveData[d.sn]||{};
+          const ld=getDeviceData(d.sn);
           const pv1=ld[361]||0,pv2=ld[70]||0,grid=ld[616]||0,temp=ld[371],volt=ld[613];
           return (
             <div key={d.sn} className="device-card" onClick={()=>navigate(`/device/${d.sn}`)}>
