@@ -559,6 +559,8 @@ function getStats(sn, fromTs, toTs) {
   return {
     daily: dailyArr.slice(-30),
     hourlyProfile,
+    pv1HourlyProfile: computeHourlyProfile(pv1Rows, fromTs, toTs),
+    pv2HourlyProfile: computeHourlyProfile(pv2Rows, fromTs, toTs),
     bestDay: bestDay || null,
     peakHour: peakHourEntry ? { hour: parseInt(peakHourEntry[0]), avg: peakHourEntry[1].avg, max: peakHourEntry[1].max } : null,
     totalKwh: round2(dailyArr.reduce((a, b) => a + b.totalKwh, 0)),

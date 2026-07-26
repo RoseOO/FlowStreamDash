@@ -61,6 +61,7 @@ a:hover { text-decoration: underline; }
 .mobile-menu.open { display: flex; }
 .mobile-menu a, .mobile-menu button { display: block; width: 100%; text-align: left; padding: 14px 16px; font-size: 15px; color: var(--text); border: none; background: none; cursor: pointer; border-radius: var(--radius); }
 .mobile-menu a:hover, .mobile-menu button:hover { background: var(--bg-card2); color: var(--text); text-decoration: none; }
+.mobile-menu .menu-section { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; padding: 16px 16px 4px; opacity: 0.7; }
 
 /* Cards */
 .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }

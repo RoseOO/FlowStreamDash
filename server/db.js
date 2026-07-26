@@ -272,9 +272,12 @@ export function getHistoricalData(sn, fromTs, toTs, fieldNums) {
 }
 
 export function getLatestData(sn) {
+  // Get the latest value of EACH field independently, not just fields from the most recent message
   const fields = db.prepare(
-    `SELECT field_num, value_num, value_text FROM data WHERE device_sn = ?
-     AND ts = (SELECT MAX(ts) FROM data WHERE device_sn = ?)`
+    `SELECT d.field_num, d.value_num, d.value_text FROM data d
+     WHERE d.device_sn = ? AND d.id IN (
+       SELECT MAX(id) FROM data WHERE device_sn = ? GROUP BY field_num
+     )`
   ).all(sn, sn);
   const result = {};
   for (const f of fields) result[f.field_num] = f.value_text || f.value_num;

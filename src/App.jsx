@@ -125,12 +125,15 @@ export default function App() {
 
           {menuOpen && (
             <div className={`mobile-menu ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
+              <div className="menu-section">Navigation</div>
               <NavLink to="/">Dashboard</NavLink>
               <NavLink to="/history">History</NavLink>
               <NavLink to="/savings">Savings</NavLink>
               <NavLink to="/stats">Stats</NavLink>
-              <NavLink to="/apidocs">API Docs</NavLink>
+              <NavLink to="/model">AI Model</NavLink>
               <NavLink to="/export">Export</NavLink>
+              <NavLink to="/apidocs">API Docs</NavLink>
+              <div className="menu-section">Settings</div>
               <NavLink to="/setup">Setup</NavLink>
               <button onClick={logout} style={{color:'var(--danger)',marginTop:8}}>Logout</button>
             </div>

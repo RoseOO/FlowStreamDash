@@ -38,8 +38,11 @@ export default function Dashboard() {
       setPanelConfig(panels); setWeather(weatherData); setForecast(forecastData);
       if (enhanced.today?.hourlyProfile) {
         setTodayProfile(Array.from({length:24},(_,h)=>({
-          hour:`${h}h`, today:enhanced.today.hourlyProfile[h]?.avg||0,
+          hour:`${h}h`,
+          today:enhanced.today.hourlyProfile[h]?.avg||0,
           yesterday:enhanced.yesterday?.hourlyProfile?.[h]?.avg||0,
+          pv1:enhanced.today.pv1HourlyProfile?.[h]?.avg||0,
+          pv2:enhanced.today.pv2HourlyProfile?.[h]?.avg||0,
         })));
       }
     }).catch(()=>{});
@@ -188,8 +191,8 @@ export default function Dashboard() {
           {tab==='compare'&&todayProfile.length>0&&<ResponsiveContainer><AreaChart animationDuration={0} data={todayProfile}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend wrapperStyle={{fontSize:11}}/>
-            <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="today" stroke="#2196F3" fill="#2196F3" fillOpacity={0.15} name="PV1"/>
-            <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="today" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.15} name="PV2"/>
+            <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="pv1" stroke="#2196F3" fill="#2196F3" fillOpacity={0.15} name="PV1"/>
+            <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="pv2" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.15} name="PV2"/>
           </AreaChart></ResponsiveContainer>}
           {tab==='monthly'&&(monthly.length>0?<ResponsiveContainer><BarChart animationDuration={0} data={monthly.slice().reverse()}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="month" tick={{fontSize:10,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
