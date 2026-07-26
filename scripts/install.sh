@@ -30,6 +30,9 @@ NODE_MAJOR=$(node -v | sed 's/v//' | cut -d. -f1)
 [[ $NODE_MAJOR -ge $NODE_MIN_VERSION ]] || err "Node.js >= ${NODE_MIN_VERSION} required (found v$(node -v))"
 
 # ── Clone or update repo ───────────────────────────────────────────
+# Uses HTTPS — for public repos no auth needed. For private repos,
+# set up a GitHub token: git config --global credential.helper store
+export GIT_TERMINAL_PROMPT=0
 if [[ -d "$APP_DIR/.git" ]]; then
     log "Repository exists, pulling latest..."
     cd "$APP_DIR"

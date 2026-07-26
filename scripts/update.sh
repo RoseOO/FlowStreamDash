@@ -21,6 +21,7 @@ cd "$APP_DIR"
 
 # ── Pull latest ────────────────────────────────────────────────────
 log "Pulling latest code..."
+export GIT_TERMINAL_PROMPT=0
 git fetch origin
 CURRENT=$(git rev-parse HEAD)
 git pull origin main || git pull origin master
