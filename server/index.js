@@ -13,6 +13,7 @@ import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, getCsvLabel
 import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggregator.js';
 import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
 import { GridMeter } from './grid-meter.js';
+import { fetchQuotaData, listDevices, verifyCredentials, getDevMqttCert } from './dev-api.js';
 import fs from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -423,6 +424,73 @@ app.get('/api/ecoflow/status', authMiddleware, (req, res) => {
     stats: mqttClient.getStats(),
   });
 });
+
+// ── Developer API Integration ───────────────────────────────
+app.get('/api/devapi/status', authMiddleware, (req, res) => {
+  res.json({
+    configured: !!(db.getSetting('dev_api_access_key')),
+    devices: [],
+  });
+});
+
+app.post('/api/devapi/configure', authMiddleware, async (req, res) => {
+  const { accessKey, secretKey } = req.body;
+  if (!accessKey || !secretKey) return res.status(400).json({ error: 'Access key and secret key required' });
+  try {
+    const devices = await verifyCredentials(accessKey, secretKey);
+    if (devices === false) return res.status(400).json({ error: 'Invalid credentials' });
+    db.setSetting('dev_api_access_key', accessKey);
+    db.setSetting('dev_api_secret_key', secretKey);
+    // If credentials also return device list, offer to auto-add them
+    res.json({ success: true, devices: devices || [] });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/devapi/sync-devices', authMiddleware, async (req, res) => {
+  try {
+    const apiDevices = await listDevices();
+    if (apiDevices.length === 0) return res.json({ added: 0, devices: [] });
+    let added = 0;
+    for (const d of apiDevices) {
+      const existing = db.getDevices().find(x => x.sn === d.sn);
+      if (!existing) {
+        db.addDevice(d.sn, d.name || d.sn, 'stream_inverter');
+        added++;
+      }
+    }
+    restartMqtt();
+    res.json({ added, devices: apiDevices });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Quota poller — fetch full device data every 30s via Developer HTTP API
+let quotaTimer = null;
+async function pollQuotaData() {
+  const devices = db.getDevices();
+  for (const d of devices) {
+    try {
+      const fields = await fetchQuotaData(d.sn);
+      if (!fields) continue;
+      // Push to WebSocket clients
+      const wsMsg = JSON.stringify({ type: 'data', sn: d.sn, fields, ts: Math.floor(Date.now()/1000), source: 'devapi' });
+      for (const client of wss.clients) {
+        if (client.readyState === 1) client.send(wsMsg);
+      }
+    } catch {}
+  }
+}
+
+function startQuotaPoller() {
+  if (quotaTimer) clearInterval(quotaTimer);
+  if (!db.getSetting('dev_api_access_key')) return;
+  quotaTimer = setInterval(pollQuotaData, 30000);
+  pollQuotaData(); // First poll immediately
+}
+setTimeout(startQuotaPoller, 10000); // Start 10s after server init
 
 // ── Device Routes ───────────────────────────────────────────
 app.get('/api/devices', authMiddleware, (req, res) => {
@@ -1421,6 +1489,72 @@ mqttClient.on('state', (state) => {
   }
 });
 
+// ── Device Control: Trigger full data upload ────────────────
+app.post('/api/device/:sn/full-upload', authMiddleware, (req, res) => {
+  const config = db.getMqttConfig();
+  if (!config || !mqttClient.connected) return res.status(503).json({ error: 'MQTT not connected' });
+  // Build ConfigWrite protobuf with activeDisplayPropertyFullUpload=true (field 71)
+  const pdata = encodeVarintField(71, 1); // field 71, varint true=1
+  const header = buildProtoHeader({ pdata, cmd_func: 254, cmd_id: 17, need_ack: 1 });
+  const msg = wrapHeaderMessage(header);
+  const topic = `/app/${config.user_id}/${req.params.sn}/thing/property/set`;
+  mqttClient.client.publish(topic, msg, { qos: 0 });
+  console.log(`[Device] Sent full-upload trigger to ${req.params.sn}`);
+  res.json({ success: true, message: 'Full upload trigger sent' });
+});
+
+app.post('/api/device/:sn/debug-mode', authMiddleware, (req, res) => {
+  const config = db.getMqttConfig();
+  if (!config || !mqttClient.connected) return res.status(503).json({ error: 'MQTT not connected' });
+  const enable = req.body.enable !== false;
+  // cfgDebugModeEnable = field 223
+  const pdata = encodeVarintField(223, enable ? 1 : 0);
+  const header = buildProtoHeader({ pdata, cmd_func: 254, cmd_id: 17, need_ack: 1 });
+  const msg = wrapHeaderMessage(header);
+  const topic = `/app/${config.user_id}/${req.params.sn}/thing/property/set`;
+  mqttClient.client.publish(topic, msg, { qos: 0 });
+  console.log(`[Device] Set debug mode=${enable} on ${req.params.sn}`);
+  res.json({ success: true, debugMode: enable });
+});
+
+// Proto encoding helpers
+function encodeVarintField(fieldNum, value) {
+  const buf = [];
+  // Tag: (fieldNum << 3) | wire_type (0 for varint)
+  let tag = (fieldNum << 3) | 0;
+  while (tag > 0x7f) { buf.push((tag & 0x7f) | 0x80); tag >>>= 7; }
+  buf.push(tag);
+  // Value as varint
+  let v = value;
+  while (v > 0x7f) { buf.push((v & 0x7f) | 0x80); v >>>= 7; }
+  buf.push(v);
+  return Buffer.from(buf);
+}
+
+function buildProtoHeader({ pdata, cmd_func, cmd_id, need_ack, seq }) {
+  // Encode inner Header proto with pdata, cmd_func, cmd_id, need_ack
+  let inner = pdata ? Buffer.concat([
+    encodeVarintField(1, pdata.length), pdata // field 1 (pdata, length-delimited)
+  ]) : Buffer.alloc(0);
+  inner = Buffer.concat([
+    inner,
+    encodeVarintField(8, cmd_func || 254),  // cmd_func
+    encodeVarintField(9, cmd_id || 17),      // cmd_id
+    need_ack ? encodeVarintField(11, 1) : Buffer.alloc(0), // need_ack
+    encodeVarintField(14, seq || Math.floor(Date.now() / 1000) % 100000), // seq
+    encodeVarintField(2, 32),  // src = 32 (app)
+    encodeVarintField(3, 2),   // dest = 2 (device)
+    encodeVarintField(16, 3),  // version = 3
+    encodeVarintField(17, 1),  // payload_ver = 1
+  ]);
+  return inner;
+}
+
+function wrapHeaderMessage(header) {
+  // Outer HeaderMessage with repeated Header
+  return Buffer.concat([encodeVarintField(1, header.length), header]);
+}
+
 // ── MQTT restart helper ─────────────────────────────────────
 let mqttFailCount = 0;
 let mqttLastFailTime = 0;
@@ -1667,6 +1801,75 @@ setInterval(() => {
 
 // ── Auto-connect on startup ─────────────────────────────────
 restartMqtt();
+
+// ── Developer API MQTT (JSON broker, richer data) ──────────
+let devMqttClient = null;
+
+async function startDevMqtt() {
+  const cert = await getDevMqttCert();
+  if (!cert) return console.log('[DevMQTT] No cert available — skipping');
+  if (devMqttClient) { try { devMqttClient.end(true); } catch {} }
+  const devices = db.getDevices();
+  if (devices.length === 0) return;
+
+  const { default: mqttModule } = await import('mqtt');
+  devMqttClient = mqttModule.connect({
+    host: cert.host, port: cert.port,
+    protocol: cert.protocol === 'mqtts' ? 'mqtts' : 'mqtt',
+    username: cert.username, password: cert.password,
+    clientId: `ecoflow_dev_${Date.now()}`,
+    keepalive: 60, reconnectPeriod: 30000,
+    rejectUnauthorized: false,
+  });
+
+  devMqttClient.on('connect', () => {
+    console.log('[DevMQTT] Connected, subscribing to', devices.length, 'devices');
+    for (const d of devices) {
+      devMqttClient.subscribe(`/open/${cert.username}/${d.sn}/quota`, { qos: 1 });
+      devMqttClient.subscribe(`/open/${cert.username}/${d.sn}/get_reply`, { qos: 1 });
+      devMqttClient.publish(`/open/${cert.username}/${d.sn}/get`, JSON.stringify({ id: String(Date.now()), version: '1.0' }), { qos: 1 });
+    }
+    console.log('[DevMQTT] Subscribed and requested quotas');
+  });
+
+  devMqttClient.on('message', (topic, payload) => {
+    try {
+      const data = JSON.parse(payload.toString());
+      const parts = topic.split('/');
+      const sn = parts[3];
+      if (!sn) return;
+
+      // Unwrap nested JSON to flat key→value
+      let flat = {};
+      function unwrap(obj, prefix='') {
+        if (!obj || typeof obj !== 'object') return;
+        for (const [key, value] of Object.entries(obj)) {
+          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            unwrap(value, prefix ? `${prefix}.${key}` : key);
+          } else {
+            flat[prefix ? `${prefix}.${key}` : key] = value;
+          }
+        }
+      }
+      unwrap(data);
+
+      // Pass labeled data directly — field numbers resolved on frontend
+      if (Object.keys(flat).length > 0) {
+        const wsMsg = JSON.stringify({ type: 'devapi', sn, fields: flat, ts: Math.floor(Date.now()/1000) });
+        for (const client of wss.clients) {
+          if (client.readyState === 1) client.send(wsMsg);
+        }
+      }
+    } catch {}
+  });
+
+  devMqttClient.on('error', (err) => console.error('[DevMQTT] Error:', err.message));
+  devMqttClient.on('close', () => console.log('[DevMQTT] Disconnected'));
+}
+
+setTimeout(() => {
+  if (db.getSetting('dev_api_access_key')) startDevMqtt().catch(e => console.error('[DevMQTT] Start failed:', e));
+}, 15000);
 
 // ── SPA fallback ────────────────────────────────────────────
 app.use((req, res) => {

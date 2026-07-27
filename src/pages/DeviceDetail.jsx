@@ -112,6 +112,14 @@ export default function DeviceDetail() {
           {ld._ts?`Last update: ${new Date(ld._ts * 1000).toLocaleTimeString()}`:'No data yet'}
           {ld._idle&&' · Idle'}
         </span>
+        <span style={{marginLeft:'auto',display:'flex',gap:6}}>
+          <button className="btn btn-sm" style={{background:'var(--bg-card2)',color:'var(--text-dim)',fontSize:10,padding:'3px 8px'}}
+            onClick={async()=>{try{await apiFetch(`/device/${sn}/full-upload`,{method:'POST'});alert('Full upload triggered — watch for data')}catch(e){alert(e.message)}}}
+            title="Request full data snapshot from device">Full Upload</button>
+          <button className="btn btn-sm" style={{background:'var(--bg-card2)',color:'var(--text-dim)',fontSize:10,padding:'3px 8px'}}
+            onClick={async()=>{try{const on=confirm('Enable debug mode on device?');await apiFetch(`/device/${sn}/debug-mode`,{method:'POST',body:JSON.stringify({enable:on})});alert(`Debug mode ${on?'ON':'OFF'}`)}catch(e){alert(e.message)}}}
+            title="Toggle debug mode on device">Debug</button>
+        </span>
       </h2>
 
       {/* Stat cards */}

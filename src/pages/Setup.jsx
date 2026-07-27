@@ -5,6 +5,7 @@ import ApiKeyManager from '../components/ApiKeyManager';
 import WeatherConfig from '../components/WeatherConfig';
 import HaMqttConfig from '../components/HaMqttConfig';
 import GridMeterConfig from '../components/GridMeterConfig';
+import DevApiConfig from '../components/DevApiConfig';
 
 export default function Setup({ onLogin, apiFetch }) {
   const auth = useAuth();
@@ -187,6 +188,12 @@ export default function Setup({ onLogin, apiFetch }) {
           <div className="form-group"><label>EcoFlow Password</label><input type="password" value={efPassword} onChange={e=>setEfPassword(e.target.value)} required/></div>
           <button className="btn btn-primary" disabled={efLoading}>{efLoading?'Connecting...':'Fetch MQTT Credentials'}</button>
         </form>
+      </div>
+
+      {/* Developer API */}
+      <div className="card">
+        <h2>Developer API</h2>
+        <DevApiConfig apiFetch={auth.apiFetch} />
       </div>
 
       {/* Devices */}

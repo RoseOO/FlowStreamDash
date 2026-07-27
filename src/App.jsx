@@ -89,6 +89,17 @@ export default function App() {
             return { ...prev, [msg.sn]: { ...prevDev, ...msg.fields, _ts: msg.ts, _idle: msg.idle || false } };
           });
         }
+        if (msg.type === 'devapi' && msg.sn && msg.fields) {
+          // Developer API JSON data with named quota keys
+          setLiveData(prev => {
+            const prevDev = prev[msg.sn] || {};
+            const devFields = {};
+            for (const [key, val] of Object.entries(msg.fields)) {
+              devFields['_dev_' + key] = val;
+            }
+            return { ...prev, [msg.sn]: { ...prevDev, ...devFields, _ts: msg.ts } };
+          });
+        }
         if (msg.type === 'alert' && msg.message) {
           // Browser notification
           if (Notification.permission === 'granted') {
