@@ -165,7 +165,9 @@ export default function Dashboard() {
             <div style={{fontSize:20,fontWeight:700,color:gridImport>5?'var(--warn)':'var(--accent)'}}>
               {gridImport>5?gridImport.toFixed(0):gridPower?.w!=null?'0':'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>W</span>
             </div>
-            <div style={{fontSize:10,color:'var(--text-dim)'}}>{gridImport>5?'Importing':gridPower?.w!=null?(isExporting?'Exporting':'Idle'):'Grid'}</div>
+            <div style={{fontSize:10,color:'var(--text-dim)'}}>{gridImport>5?'Importing':gridPower?.w!=null?(isExporting?'Exporting':'Idle'):'Grid'}
+              {gridPower?.v!=null && <span> · {gridPower.v.toFixed(0)}V</span>}
+            </div>
           </div>
         </div>
       </div>

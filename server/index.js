@@ -1376,7 +1376,7 @@ gridMeter.on('data', ({ ts, power_w, energy_kwh }) => {
     try { db.insertGridReading(ts, power_w, energy_kwh); } catch {}
   }
   // Broadcast to WebSocket clients
-  const msg = JSON.stringify({ type: 'grid', ts, power_w, energy_kwh });
+  const msg = JSON.stringify({ type: 'grid', ts, power_w, energy_kwh, voltage_v, current_a });
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(msg);
   }

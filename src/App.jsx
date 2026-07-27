@@ -108,7 +108,7 @@ export default function App() {
           setAlerts(prev => [...prev.slice(-4), { ...msg, ts: Date.now() }]);
         }
         if (msg.type === 'grid' && msg.power_w != null) {
-          setGridPower({ w: msg.power_w, kwh: msg.energy_kwh, ts: msg.ts });
+          setGridPower({ w: msg.power_w, kwh: msg.energy_kwh, ts: msg.ts, v: msg.voltage_v, a: msg.current_a });
         }
       } catch {}
     };
