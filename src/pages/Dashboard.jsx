@@ -96,6 +96,7 @@ export default function Dashboard() {
 
   function fmt(v,d=1){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
   function date(t){return t?new Date(t*1000).toLocaleDateString():'';}
+  function minuteToStr(m){if(m==null)return'--';const h=Math.floor(m/60),min=m%60;return`${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;}
 
   return (
     <div>
@@ -120,7 +121,12 @@ export default function Dashboard() {
       {/* ── PV Performance Cards ── */}
       {(pv1Rated>0||pv2Rated>0) && (
         <div className="grid-2" style={{marginBottom:12}}>
-          {pv1Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv1;return(
+          {pv1Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv1;const ydl=stats?.yesterday?.daylight?.pv1;
+            // Estimate end time from yesterday if today hasn't finished generating
+            const estEnd = (!dl?.lastMinute && ydl?.lastMinute) ? ydl.lastMinute : null;
+            const window = dl?.window || '--';
+            const showEst = estEnd && dl?.firstMinute != null;
+            return(
             <div className="card" style={{padding:16}}>
               <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV1 Performance</div>
               <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
@@ -137,14 +143,18 @@ export default function Dashboard() {
                   <div style={{fontSize:22,fontWeight:600,color:dl?.daylightEff>70?'var(--accent)':dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'}}>{dl?.daylightEff!=null?fmt(dl.daylightEff,1):'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
                 </div>
                 <div style={{flex:1,minWidth:90}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Gen Window</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{dl?.window||'--'}</div>
+                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Gen Window{showEst?' (est)':''}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{showEst ? `${dl.firstMinute != null ? minuteToStr(dl.firstMinute) : '--'}~${minuteToStr(estEnd)}` : window}</div>
                   <div style={{fontSize:10,color:'var(--text-dim)'}}>{dl?.genHours||0} daylight hrs · {pv1Rated}W rated · {fmt(pv1v,1)}V · {fmt(pv1a,2)}A</div>
                 </div>
               </div>
             </div>
           )})()}
-          {pv2Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv2;return(
+          {pv2Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv2;const ydl=stats?.yesterday?.daylight?.pv2;
+            const estEnd = (!dl?.lastMinute && ydl?.lastMinute) ? ydl.lastMinute : null;
+            const window = dl?.window || '--';
+            const showEst = estEnd && dl?.firstMinute != null;
+            return(
             <div className="card" style={{padding:16}}>
               <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV2 Performance</div>
               <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
@@ -161,8 +171,8 @@ export default function Dashboard() {
                   <div style={{fontSize:22,fontWeight:600,color:dl?.daylightEff>70?'var(--accent)':dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'}}>{dl?.daylightEff!=null?fmt(dl.daylightEff,1):'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
                 </div>
                 <div style={{flex:1,minWidth:90}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Gen Window</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{dl?.window||'--'}</div>
+                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Gen Window{showEst?' (est)':''}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{showEst ? `${dl.firstMinute != null ? minuteToStr(dl.firstMinute) : '--'}~${minuteToStr(estEnd)}` : window}</div>
                   <div style={{fontSize:10,color:'var(--text-dim)'}}>{dl?.genHours||0} daylight hrs · {pv2Rated}W rated · {fmt(pv2v,1)}V · {fmt(pv2a,2)}A</div>
                 </div>
               </div>
