@@ -271,9 +271,6 @@ export default function Dashboard() {
         {streak>0&&<div className="stat-card" style={{flex:'1',minWidth:70,textAlign:'center'}}>
           <div className="label">Generation Streak</div><div style={{fontSize:16,fontWeight:700,color:'var(--warn)'}}>{streak} days</div>
         </div>}
-        <div className="stat-card" style={{flex:'1',minWidth:70,textAlign:'center'}}>
-          <div className="label">🌳 CO₂ Equivalent</div><div style={{fontSize:16,fontWeight:600,color:'var(--accent)'}}>≈{fmt(co2Today*1000/7.5,0)} trees today</div>
-        </div>
       </div>
 
       {/* ── Tabbed Charts ── */}

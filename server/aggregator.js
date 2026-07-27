@@ -46,9 +46,9 @@ export function calculateSavings(sn, fromTs, toTs) {
   if (!rate) return { error: 'No electricity rate configured' };
   let dayRate = rate.price_per_kwh;
   // Check for night rate
-  const nightRateVal = parseFloat(db.default.prepare("SELECT value FROM settings WHERE key='night_rate'").get()?.value || '0');
-  const nightStart = parseInt(db.default.prepare("SELECT value FROM settings WHERE key='night_start'").get()?.value || '23');
-  const nightEnd = parseInt(db.default.prepare("SELECT value FROM settings WHERE key='night_end'").get()?.value || '6');
+  const nightRateVal = parseFloat(getSetting('night_rate') || '0');
+  const nightStart = parseInt(getSetting('night_start') || '23');
+  const nightEnd = parseInt(getSetting('night_end') || '6');
   const hasNightRate = nightRateVal > 0;
 
   // Get PV production
