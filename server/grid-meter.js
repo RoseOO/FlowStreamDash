@@ -1,6 +1,6 @@
-// Grid Meter Poller — polls ESPHome web_server REST API for real grid data
-// Sonoff POWCT sensors: power, voltage, current, total_daily_energy
-// REST API format: GET http://<ip>/sensor/<id> → {"id":"sensor-xxx","value":123,"state":"123 W"}
+// Grid Meter — Persistent SSE connection to ESPHome web_server events
+// Sonoff POWCT via ESPHome v3 web_server /events endpoint
+// No polling needed — events stream pushes real-time sensor updates
 
 import { EventEmitter } from 'events';
 
@@ -8,8 +8,9 @@ export class GridMeter extends EventEmitter {
   constructor() {
     super();
     this.config = null;
-    this.timer = null;
+    this.controller = null;
     this.lastData = null;
+    this.running = false;
   }
 
   configure(cfg) {
@@ -20,92 +21,83 @@ export class GridMeter extends EventEmitter {
   start() {
     this.stop();
     if (!this.config?.enabled || !this.config?.ip) return;
-    const interval = (this.config.interval || 2) * 1000;
-    this.timer = setInterval(() => this.poll(), interval);
-    this.poll();
-    console.log(`[GridMeter] Polling ESPHome at ${this.config.ip} every ${interval/1000}s`);
+    this.running = true;
+    this._connect();
+    console.log(`[GridMeter] SSE streaming from ${this.config.ip}`);
   }
 
   stop() {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.running = false;
+    if (this.controller) { this.controller.abort(); this.controller = null; }
   }
 
-  async poll() {
-    if (!this.config?.ip) return;
+  async _connect() {
+    if (!this.running || !this.config?.ip) return;
+    const base = `http://${this.config.ip}`;
+    this.controller = new AbortController();
+
     try {
-      const base = `http://${this.config.ip}`;
-      const results = {};
-      let firstError = null;
+      const res = await fetch(`${base}/events`, {
+        signal: this.controller.signal,
+        headers: { 'Accept': 'text/event-stream' },
+      });
 
-      // Primary: use the SSE events endpoint (works with ESPHome v3)
-      try {
-        const r = await fetch(`${base}/events`, { signal: AbortSignal.timeout(3000) });
-        if (r.ok) {
-          const reader = r.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          const start = Date.now();
-          while (Date.now() - start < 800) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-              if (line.startsWith('data:')) {
-                try {
-                  const d = JSON.parse(line.slice(5).trim());
-                  if (d.id && d.value != null) {
-                    const name = d.id.replace('sensor-', '').replace('binary_sensor-', '');
-                    results[name] = d.value;
-                  }
-                } catch {}
-              }
-            }
-          }
-          try { reader.cancel(); } catch {}
-        }
-      } catch(e) { firstError = e.message; }
-
-      // Fallback: individual sensor endpoints
-      if (Object.keys(results).length === 0) {
-        const sensors = ['power', 'voltage', 'current', 'total_daily_energy', 'power_factor'];
-        for (const id of sensors) {
-          try {
-            const r = await fetch(`${base}/sensor/${id}`, { signal: AbortSignal.timeout(1500) });
-            if (!r.ok) continue;
-            const text = await r.text();
-            if (!text) continue;
-            try {
-              const data = JSON.parse(text);
-              if (data.value != null) results[id] = data.value;
-            } catch {}
-          } catch {}
-        }
-      }
-
-      if (Object.keys(results).length === 0) {
-        if (!this._lastErrLog || Date.now() - this._lastErrLog > 60000) {
-          console.error(`[GridMeter] No data (${firstError || 'empty'}) — curl http://${this.config.ip}/`);
-          this._lastErrLog = Date.now();
-        }
+      if (!res.ok) {
+        console.error(`[GridMeter] SSE connection failed: HTTP ${res.status}`);
+        if (this.running) setTimeout(() => this._connect(), 5000);
         return;
       }
 
-      this._lastErrLog = 0;
-      const now = Math.floor(Date.now() / 1000);
-      const power = results.power ?? null;
-      const energy = results.total_daily_energy ?? null;
-      const voltage = results.voltage ?? null;
-      const current = results.current ?? null;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const results = {};
 
-      this.lastData = { ts: now, power_w: power, energy_kwh: energy, voltage_v: voltage, current_a: current };
-      this.emit('data', this.lastData);
+      while (this.running) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          try {
+            const d = JSON.parse(line.slice(5).trim());
+            if (d.id && d.value != null) {
+              const name = d.id.replace('sensor-', '').replace('binary_sensor-', '');
+              results[name] = d.value;
+            }
+          } catch {}
+        }
+
+        // Emit batch every ~500ms
+        if (Object.keys(results).length >= 4) {
+          const now = Math.floor(Date.now() / 1000);
+          this.lastData = {
+            ts: now,
+            power_w: results.power ?? null,
+            energy_kwh: results.total_daily_energy ?? null,
+            voltage_v: results.voltage ?? null,
+            current_a: results.current ?? null,
+          };
+          this.emit('data', this.lastData);
+          // Clear for next batch
+          for (const k of Object.keys(results)) delete results[k];
+        }
+      }
     } catch (e) {
+      if (e.name === 'AbortError') return;
       if (!this._lastErrLog || Date.now() - this._lastErrLog > 60000) {
-        console.error(`[GridMeter] Poll error: ${e.message}`);
+        console.error(`[GridMeter] SSE error: ${e.message} — reconnecting in 5s`);
         this._lastErrLog = Date.now();
       }
+    }
+
+    // Reconnect after delay
+    if (this.running) {
+      this.controller = null;
+      setTimeout(() => this._connect(), 5000);
     }
   }
 }
