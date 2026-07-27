@@ -121,7 +121,10 @@ export default function Dashboard() {
           <div style={{textAlign:'center',minWidth:70}}>
             <div style={{fontSize:28}}>☀</div>
             <div style={{fontSize:20,fontWeight:700,color:'var(--pv2)'}}>{totalPv.toFixed(0)}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
-            <div style={{fontSize:10,color:'var(--text-dim)'}}>Solar</div>
+            <div style={{fontSize:10,color:'var(--text-dim)'}}>Solar
+              {(d[380]||d[442]) && <span> · {fmt((d[380]||0)+(d[442]||0),0)}V</span>}
+              {(d[381]||d[71]) && <span> · {fmt((d[381]||0)+(d[71]||0),1)}A</span>}
+            </div>
           </div>
 
           {/* Flow bar: Solar → Home */}

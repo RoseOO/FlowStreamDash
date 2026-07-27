@@ -8,6 +8,7 @@ import Export from './pages/Export';
 import Stats from './pages/Stats';
 import ApiDocs from './pages/ApiDocs';
 import Model from './pages/Model';
+import GridDetail from './pages/GridDetail';
 import Setup from './pages/Setup';
 
 // ── Auth Context ────────────────────────────────────────────
@@ -146,6 +147,7 @@ export default function App() {
               <NavLink to="/stats">Stats</NavLink>
             <NavLink to="/apidocs">API</NavLink>
             <NavLink to="/model">Model</NavLink>
+            <NavLink to="/grid">Grid Meter</NavLink>
             <NavLink to="/export">Export</NavLink>
               <NavLink to="/setup">Setup</NavLink>
             </div>
@@ -163,6 +165,7 @@ export default function App() {
               <NavLink to="/savings">Savings</NavLink>
               <NavLink to="/stats">Stats</NavLink>
               <NavLink to="/model">AI Model</NavLink>
+              <NavLink to="/grid">Grid Meter</NavLink>
               <NavLink to="/export">Export</NavLink>
               <NavLink to="/apidocs">API Docs</NavLink>
               <div className="menu-section">Settings</div>
@@ -181,6 +184,7 @@ export default function App() {
               <Route path="/stats" element={<Stats />} />
               <Route path="/apidocs" element={<ApiDocs />} />
               <Route path="/model" element={<Model />} />
+              <Route path="/grid" element={<GridDetail />} />
               <Route path="/setup" element={<Setup />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
