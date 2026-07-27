@@ -100,9 +100,10 @@ export function calculateSavings(sn, fromTs, toTs) {
   const exportValue = totalExportKwh * rate.price_per_kwh;
   const selfConsKwh = Math.max(0, totalPvKwh - totalExportKwh);
   const selfConsumptionSaving = selfConsKwh * rate.price_per_kwh;
-  const totalSaving = hasGridData
-    ? round(selfConsumptionSaving + exportValue - importCost)
-    : round(totalPvKwh * rate.price_per_kwh); // no grid meter: simple PV × rate
+  // Total saving = what solar saved you (always positive)
+  // Import cost is your grid bill — shown separately, not subtracted from savings
+  const totalSaving = round(totalPvKwh * rate.price_per_kwh);
+  const netPosition = round(selfConsumptionSaving + exportValue - importCost);
 
   return {
     rate: rate.price_per_kwh, currency: rate.currency || 'GBP',
@@ -115,7 +116,7 @@ export function calculateSavings(sn, fromTs, toTs) {
     importCost: round(importCost),
     exportValue: round(exportValue),
     selfConsumptionSaving: round(selfConsumptionSaving),
-    totalSaving, netSaving: totalSaving,
+    totalSaving, netSaving: totalSaving, netPosition,
     sampleCount: pvRows.length,
     hasGridMeter: hasGridData,
     fromTs, toTs,

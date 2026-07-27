@@ -105,13 +105,14 @@ export default function Savings() {
 
       {savings&&!savings.error&&<>
         <div className="grid-4" style={{margin:'16px 0'}}>
-          <div className="stat-card"><div className="label">Total Saved</div><div className="value" style={{color:'var(--accent)'}}>£{savings.totalSaving}</div>
-            <div className="sub">{savings.hasGridMeter?'Based on grid meter data':'Based on solar production'}</div></div>
-          <div className="stat-card"><div className="label">Solar Produced</div><div className="value">{savings.totalPvKwh}<span className="unit">kWh</span></div></div>
-          <div className="stat-card"><div className="label">Grid Import</div><div className="value" style={{color:savings.totalImportKwh>0?'var(--warn)':'var(--text-dim)'}}>{savings.totalImportKwh}<span className="unit">kWh</span></div>
-            <div className="sub">£{savings.importCost}</div></div>
-          <div className="stat-card"><div className="label">Grid Export</div><div className="value" style={{color:'var(--accent2)'}}>{savings.totalExportKwh}<span className="unit">kWh</span></div>
-            <div className="sub">£{savings.exportValue}</div></div>
+          <div className="stat-card"><div className="label">Solar Saving</div><div className="value" style={{color:'var(--accent)'}}>£{savings.totalSaving}</div>
+            <div className="sub">£{savings.rate}/kWh × {savings.totalPvKwh}kWh</div></div>
+          <div className="stat-card"><div className="label">Grid Import Cost</div><div className="value" style={{color:'var(--warn)'}}>£{savings.importCost}</div>
+            <div className="sub">{savings.totalImportKwh} kWh</div></div>
+          <div className="stat-card"><div className="label">Export Value</div><div className="value" style={{color:'var(--accent2)'}}>£{savings.exportValue}</div>
+            <div className="sub">{savings.totalExportKwh} kWh</div></div>
+          <div className="stat-card"><div className="label">Net Position</div><div className="value" style={{color:savings.netPosition>=0?'var(--accent)':'var(--warn)'}}>£{savings.netPosition}</div>
+            <div className="sub">{savings.hasGridMeter?'With grid meter':'Solar estimate only'}</div></div>
         </div>
       </>}
 
