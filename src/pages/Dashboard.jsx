@@ -167,6 +167,7 @@ export default function Dashboard() {
             </div>
             <div style={{fontSize:10,color:'var(--text-dim)'}}>{gridImport>5?'Importing':gridPower?.w!=null?(isExporting?'Exporting':'Idle'):'Grid'}
               {gridPower?.v!=null && <span> · {gridPower.v.toFixed(0)}V</span>}
+              {gridPower?.a!=null && <span> · {gridPower.a.toFixed(1)}A</span>}
             </div>
           </div>
         </div>
