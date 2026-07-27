@@ -60,6 +60,7 @@ export async function getReadings(resourceId, from, to, period = 'P1D') {
 }
 
 // Backfill historical grid import data from Bright into our DB
+// Uses PT30M (30-min) for detailed data, falls back to P1D for older data
 export async function backfillGridData(fromTs, toTs) {
   try {
     const ves = await getVirtualEntities();
@@ -79,28 +80,50 @@ export async function backfillGridData(fromTs, toTs) {
 
     if (!consumptionResId) return { error: 'No electricity consumption resource found' };
 
-    // Batch into 31-day chunks (Bright API limit)
-    const CHUNK_DAYS = 30;
-    const chunkSec = CHUNK_DAYS * 86400;
+    // Strategy: PT30M (limit 10 days) for last 90 days, P1D (limit 31 days) for older
+    const now = Math.floor(Date.now() / 1000);
     let totalReadings = 0;
     const allRows = [];
 
-    for (let chunkStart = fromTs; chunkStart < toTs; chunkStart += chunkSec) {
-      const chunkEnd = Math.min(chunkStart + chunkSec, toTs);
-      try {
-        const readings = await getReadings(consumptionResId, chunkStart, chunkEnd, 'P1D');
-        for (const [ts, kwh] of readings) {
-          const avgWatts = Math.round((kwh / 24) * 1000);
-          allRows.push({ ts, power_w: avgWatts, energy_kwh: kwh, source: 'bright' });
-          totalReadings++;
-        }
-        console.log(`[Bright] Backfilled ${new Date(chunkStart*1000).toLocaleDateString()} - ${new Date(chunkEnd*1000).toLocaleDateString()}: ${readings.length} readings`);
-      } catch {}
-      // Small delay between chunks
-      await new Promise(r => setTimeout(r, 500));
+    // Recent: 30-minute data (last 90 days, in 10-day chunks)
+    const recentStart = Math.max(fromTs, now - 90 * 86400);
+    if (recentStart < toTs) {
+      const chunkSec = 9 * 86400; // 9 days per chunk (safely under 10-day limit)
+      for (let chunkStart = recentStart; chunkStart < toTs; chunkStart += chunkSec) {
+        const chunkEnd = Math.min(chunkStart + chunkSec, toTs);
+        try {
+          const readings = await getReadings(consumptionResId, chunkStart, chunkEnd, 'PT30M');
+          for (const [ts, kwh] of readings) {
+            // PT30M gives kWh per 30-min period → convert to watts
+            const avgWatts = Math.round(kwh * 2000); // kWh/30min → W (kWh * 1000 / 0.5)
+            allRows.push({ ts, power_w: avgWatts, energy_kwh: kwh, source: 'bright' });
+            totalReadings++;
+          }
+          console.log(`[Bright] PT30M ${new Date(chunkStart*1000).toLocaleDateString()} - ${new Date(chunkEnd*1000).toLocaleDateString()}: ${readings.length} readings`);
+        } catch {}
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
 
-    return { readings: totalReadings, exportReadings: 0, sample: allRows[0], rows: allRows };
+    // Older: daily data (from fromTs to recentStart, in 30-day chunks)
+    if (fromTs < recentStart) {
+      const chunkSec = 30 * 86400;
+      for (let chunkStart = fromTs; chunkStart < recentStart; chunkStart += chunkSec) {
+        const chunkEnd = Math.min(chunkStart + chunkSec, recentStart);
+        try {
+          const readings = await getReadings(consumptionResId, chunkStart, chunkEnd, 'P1D');
+          for (const [ts, kwh] of readings) {
+            const avgWatts = Math.round((kwh / 24) * 1000);
+            allRows.push({ ts, power_w: avgWatts, energy_kwh: kwh, source: 'bright' });
+            totalReadings++;
+          }
+          console.log(`[Bright] P1D ${new Date(chunkStart*1000).toLocaleDateString()} - ${new Date(chunkEnd*1000).toLocaleDateString()}: ${readings.length} readings`);
+        } catch {}
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+
+    return { readings: totalReadings, sample: allRows[0], rows: allRows };
   } catch (e) {
     return { error: e.message };
   }
