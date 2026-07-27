@@ -13,7 +13,7 @@ import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, getCsvLabel
 import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggregator.js';
 import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
 import { GridMeter } from './grid-meter.js';
-import { getDevMqttCert, verifyCredentials, listDevices, fetchQuotaData } from './dev-api.js';
+import { getDevMqttCert, verifyCredentials, listDevices, fetchAllQuota } from './dev-api.js';
 import fs from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -389,6 +389,18 @@ app.get('/api/public/weather', apiKeyAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Grid meter data
+app.get('/api/public/grid-meter', apiKeyAuth, (req, res) => {
+  const { from, to } = req.query;
+  const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-86400);
+  const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
+  const rows = db.getGridData(fromTs, toTs);
+  res.json(rows);
+});
+app.get('/api/public/grid-meter/latest', apiKeyAuth, (req, res) => {
+  res.json(db.getLatestGridReading() || { power_w: null, energy_kwh: null });
+});
+
 // ── EcoFlow Login Route ─────────────────────────────────────
 app.post('/api/ecoflow/login', authMiddleware, async (req, res) => {
   const { email, password } = req.body;
@@ -467,15 +479,16 @@ app.post('/api/devapi/sync-devices', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Dev API quota poller (every 60s, POST-based) ───────────
+// ── Dev API quota poller (every 60s, GET quota/all) ────────
 let quotaTimer = null;
 async function pollQuotaData() {
   const devices = db.getDevices();
   for (const d of devices) {
     try {
-      const fields = await fetchQuotaData(d.sn);
-      if (!fields) continue;
-      const wsMsg = JSON.stringify({ type: 'devapi', sn: d.sn, fields, ts: Math.floor(Date.now()/1000) });
+      const data = await fetchAllQuota(d.sn);
+      if (!data || Object.keys(data).length === 0) continue;
+      // Pass raw quota data to frontend via WebSocket
+      const wsMsg = JSON.stringify({ type: 'devapi', sn: d.sn, fields: data, ts: Math.floor(Date.now()/1000) });
       for (const client of wss.clients) {
         if (client.readyState === 1) client.send(wsMsg);
       }
@@ -484,7 +497,7 @@ async function pollQuotaData() {
 }
 setTimeout(() => {
   if (db.getSetting('dev_api_access_key')) {
-    console.log('[DevAPI] Starting quota poller');
+    console.log('[DevAPI] Starting quota/all poller (60s)');
     quotaTimer = setInterval(pollQuotaData, 60000);
     pollQuotaData();
   }
@@ -1389,6 +1402,83 @@ app.get('/api/grid-meter/history', authMiddleware, (req, res) => {
   const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-86400);
   const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
   res.json(db.getGridData(fromTs, toTs));
+});
+
+// Grid meter stats
+app.get('/api/grid-meter/stats', authMiddleware, (req, res) => {
+  const { from, to } = req.query;
+  const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-86400);
+  const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
+  const rows = db.getGridData(fromTs, toTs);
+  if (!rows || rows.length < 2) return res.json({ error: 'No grid data' });
+
+  let totalImport = 0, totalExport = 0, peakImport = 0, lastTs = null;
+  const daily = {}, hourly = {};
+  for (const r of rows) {
+    if (r.power_w == null) continue;
+    if (lastTs !== null) {
+      const intervalHours = (r.ts - lastTs) / 3600;
+      if (intervalHours > 0 && intervalHours < 1) {
+        if (r.power_w > 5) totalImport += (r.power_w * intervalHours) / 1000;
+        else if (r.power_w < -5) totalExport += (Math.abs(r.power_w) * intervalHours) / 1000;
+        if (r.power_w > peakImport) peakImport = r.power_w;
+      }
+    }
+    lastTs = r.ts;
+    // Daily breakdown
+    const day = Math.floor(r.ts / 86400) * 86400;
+    if (!daily[day]) daily[day] = { importKwh: 0, exportKwh: 0, peakW: 0 };
+    const h = new Date(r.ts * 1000).getHours();
+    if (!hourly[h]) hourly[h] = { sum: 0, count: 0 };
+    hourly[h].sum += r.power_w;
+    hourly[h].count++;
+  }
+
+  // Complete daily tracking
+  let lastDayTs = null;
+  for (const r of rows) {
+    if (r.power_w == null) continue;
+    const day = Math.floor(r.ts / 86400) * 86400;
+    if (lastDayTs !== null && lastDayTs !== day) {
+      const intervalH = (r.ts - lastDayTs) / 3600;
+      if (intervalH > 0 && intervalH < 1) {
+        if (r.power_w > 5) daily[day].importKwh += (r.power_w * intervalH) / 1000;
+        else if (r.power_w < -5) daily[day].exportKwh += (Math.abs(r.power_w) * intervalH) / 1000;
+        if (r.power_w > daily[day].peakW) daily[day].peakW = r.power_w;
+      }
+    }
+    lastDayTs = r.ts;
+  }
+
+  const dailyArr = Object.entries(daily).map(([ts, d]) => ({
+    date: new Date(parseInt(ts)*1000).toLocaleDateString().slice(0,5),
+    ts: parseInt(ts),
+    importKwh: round2(d.importKwh),
+    exportKwh: round2(d.exportKwh),
+    peakW: round2(d.peakW),
+  })).sort((a,b) => a.ts - b.ts);
+
+  const hourlyArr = Array.from({length: 24}, (_, h) => ({
+    hour: `${h}:00`,
+    avgW: hourly[h] ? round2(hourly[h].sum / hourly[h].count) : 0,
+    peakW: hourly[h] ? round2(Math.max(...rows.filter(r=>new Date(r.ts*1000).getHours()===h).map(r=>r.power_w||0))) : 0,
+  }));
+
+  const rate = db.getCurrentRate();
+  const price = rate ? rate.price_per_kwh : 0;
+
+  res.json({
+    totalImportKwh: round2(totalImport),
+    totalExportKwh: round2(totalExport),
+    peakImportW: round2(peakImport),
+    importCost: round2(totalImport * price),
+    exportValue: round2(totalExport * price),
+    netCost: round2((totalImport - totalExport) * price),
+    rate: price,
+    daily: dailyArr.slice(-30),
+    hourly: hourlyArr,
+    sampleCount: rows.length,
+  });
 });
 
 // Auto-start grid meter on startup (delay for server init)

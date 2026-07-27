@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [monthly, setMonthly] = useState([]);
   const [forecast, setForecast] = useState(null);
   const [health, setHealth] = useState(null);
+  const [gridStats, setGridStats] = useState(null);
   const [todayProfile, setTodayProfile] = useState([]);
   const [tab, setTab] = useState('today');
   const [snapshots, setSnapshots] = useState({});
@@ -54,6 +55,13 @@ export default function Dashboard() {
       setPanelConfig(panels); setWeather(weatherData); setForecast(forecastData);
       // Also fetch system health
       apiFetch('/system/health').then(setHealth).catch(()=>{});
+      // Fetch grid meter stats + merge hourly into today profile
+      apiFetch(`/grid-meter/stats?from=${todayStart}&to=${now}`).then(gs => {
+        setGridStats(gs);
+        if (gs?.hourly) {
+          setTodayProfile(prev => prev.map((p,i) => ({...p, gridImport: gs.hourly[i]?.avgW||0})));
+        }
+      }).catch(()=>{});
       if (enhanced.today?.hourlyProfile) {
         setTodayProfile(Array.from({length:24},(_,h)=>({
           hour:`${h}h`,
@@ -167,6 +175,7 @@ export default function Dashboard() {
           {label:'Today',val:todayKwh,unit:'kWh',fmt:2,sub:vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null},
           {label:'Saving',val:totalSaving,color:'var(--accent)',fmt:2,prefix:'£'},
           gridPower?.w!=null&&{label:'Grid Meter',val:Math.abs(gridPower.w),unit:'W',color:gridPower.w>0?'var(--warn)':'var(--accent)',prefix:gridPower.w>0?'Import ':'Export ',sub:`${gridPower.w>0?'Importing':'Exporting'} from grid`},
+          gridStats?.importCost!=null&&{label:'Import Cost Today',val:gridStats.importCost,color:'var(--warn)',fmt:2,prefix:'£'},
           {label:'CO₂',val:co2Today,unit:'kg',color:'var(--accent)',fmt:3},
           forecast&&{label:forecast.usingLearnedModel?'☀ AI Forecast':'Forecast',val:forecast.predictedTotalKwh,unit:'kWh',color:'var(--accent2)',sub:forecast.usingLearnedModel?`×${forecast.modelFactor} · ${forecast.modelSamples} samples`:`${forecast.alreadyProducedKwh}kWh done`},
           {label:'Projected/yr',val:annualKwh,unit:'kWh',sub:`£${fmt(annualKwh*rate,0)}·${fmt(rate,2)}/kWh`},
@@ -289,6 +298,7 @@ export default function Dashboard() {
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend wrapperStyle={{fontSize:11}}/>
             <Area isAnimationActive={false} connectNulls={true} type="monotone" dataKey="today" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.2} name="Today"/>
             <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="yesterday" stroke="#8890a5" strokeDasharray="6 3" name="Yesterday" dot={false}/>
+            <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="gridImport" stroke="#FF9800" name="Grid Import" dot={false} strokeWidth={1.5}/>
           <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </ComposedChart></ResponsiveContainer>}
           {tab==='weather'&&(weather?<ResponsiveContainer><AreaChart animationDuration={0} data={weather.map(w=>({hour:`${w.hour}h`,cloud:w.cloudCover}))}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>

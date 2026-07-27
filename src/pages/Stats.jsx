@@ -14,6 +14,7 @@ export default function Stats() {
   const [pr, setPr] = useState(null);
   const [quality, setQuality] = useState(null);
   const [degradation, setDegradation] = useState(null);
+  const [gridStats, setGridStats] = useState(null);
   const [tab, setTab] = useState('profile');
 
   useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
@@ -31,7 +32,8 @@ export default function Stats() {
       selectedSn!=='__all__'&&apiFetch(`/stats/${selectedSn}/pr?from=${now-30*DAY}&to=${now}`),
       selectedSn!=='__all__'&&apiFetch(`/stats/${selectedSn}/quality`),
       selectedSn!=='__all__'&&apiFetch(`/stats/${selectedSn}/degradation`),
-    ]).then(([s,p,q,d])=>{setStats(s);setPr(p||null);setQuality(q||null);setDegradation(d||null);})
+      apiFetch(`/grid-meter/stats?from=${from}&to=${now}`).catch(()=>{}),
+    ]).then(([s,p,q,d,g])=>{setStats(s);setPr(p||null);setQuality(q||null);setDegradation(d||null);setGridStats(g||null);})
     .finally(()=>setLoading(false));
   }, [selectedSn, range]);
 
@@ -108,6 +110,29 @@ export default function Stats() {
             </ComposedChart>
           </ResponsiveContainer></div>
         </div>}
+
+        {/* Grid Meter Stats */}
+        {gridStats && !gridStats.error && (
+          <>
+            <div className="grid-4" style={{marginBottom:12}}>
+              <div className="stat-card" style={{textAlign:'center'}}><div className="label">Grid Import</div><div className="value">{gridStats.totalImportKwh}<span className="unit">kWh</span></div></div>
+              <div className="stat-card" style={{textAlign:'center'}}><div className="label">Import Cost</div><div className="value" style={{color:'var(--warn)'}}>£{gridStats.importCost}</div></div>
+              <div className="stat-card" style={{textAlign:'center'}}><div className="label">Grid Export</div><div className="value">{gridStats.totalExportKwh}<span className="unit">kWh</span></div></div>
+              <div className="stat-card" style={{textAlign:'center'}}><div className="label">Net Cost</div><div className="value" style={{color:gridStats.netCost>0?'var(--warn)':'var(--accent)'}}>£{gridStats.netCost}</div></div>
+            </div>
+            <div className="card" style={{marginBottom:12}}>
+              <h3>Grid Import by Day (kWh)</h3>
+              <div style={{width:'100%',height:260}}><ResponsiveContainer>
+                <BarChart animationDuration={0} data={gridStats.daily}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+                  <XAxis dataKey="date" tick={{fontSize:10,fill:'var(--text-dim)'}}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
+                  <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
+                  <Bar isAnimationActive={false} dataKey="importKwh" fill="#FF9800" name="Import kWh" radius={[2,2,0,0]}/>
+                  <Bar isAnimationActive={false} dataKey="exportKwh" fill="#4CAF50" name="Export kWh" radius={[2,2,0,0]}/>
+                </BarChart>
+              </ResponsiveContainer></div>
+            </div>
+          </>
+        )}
 
         {/* Tabs for charts */}
         <div className="tabs">

@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 export default function GridMeterConfig({ apiFetch }) {
   const [enabled, setEnabled] = useState(false);
   const [ip, setIp] = useState('');
-  const [interval, setInterval] = useState('10');
   const [connected, setConnected] = useState(false);
   const [lastPower, setLastPower] = useState(null);
   const [saved, setSaved] = useState('');
@@ -11,7 +10,7 @@ export default function GridMeterConfig({ apiFetch }) {
 
   useEffect(() => {
     apiFetch('/settings/grid-meter').then(d => {
-      setEnabled(d.enabled); setIp(d.ip); setInterval(String(d.interval));
+      setEnabled(d.enabled); setIp(d.ip);
       setConnected(d.connected); setLastPower(d.lastPower);
     });
   }, []);
@@ -20,7 +19,7 @@ export default function GridMeterConfig({ apiFetch }) {
     e.preventDefault(); setError(''); setSaved('');
     try {
       await apiFetch('/settings/grid-meter', {
-        method:'POST', body:JSON.stringify({ enabled, ip, interval: parseInt(interval) }),
+        method:'POST', body:JSON.stringify({ enabled, ip }),
       });
       setSaved('Saved');
       setTimeout(() => setSaved(''), 3000);
@@ -37,20 +36,12 @@ export default function GridMeterConfig({ apiFetch }) {
         {connected && <span style={{fontSize:11,color:'var(--accent)'}}>● {lastPower != null ? `${lastPower.toFixed(0)}W` : 'Connected'}</span>}
       </div>
       {enabled && <>
-        <div className="flex-row gap-sm" style={{flexWrap:'wrap'}}>
-          <div className="form-group" style={{flex:1,minWidth:150,marginBottom:8}}>
-            <label>ESPHome Device IP</label>
-            <input value={ip} onChange={e=>setIp(e.target.value)} placeholder="192.168.1.50" required/>
-          </div>
-          <div className="form-group" style={{width:100,marginBottom:8}}>
-            <label>Poll (sec)</label>
-            <input type="number" min="1" max="300" value={interval} onChange={e=>setInterval(e.target.value)}/>
-          </div>
+        <div className="form-group" style={{marginBottom:8}}>
+          <label>ESPHome Device IP</label>
+          <input value={ip} onChange={e=>setIp(e.target.value)} placeholder="192.168.150.202" required/>
         </div>
         <p style={{fontSize:11,color:'var(--text-dim)',marginBottom:8}}>
-          Works with Sonoff POW Ring (POWCT) running ESPHome. 
-          Enter the device IP — it auto-discovers available sensors.
-          Data logs to the database and feeds into savings calculations.
+          Uses persistent SSE connection to ESPHome web_server /events. No polling needed — real-time updates.
         </p>
       </>}
       {error && <div className="error">{error}</div>}

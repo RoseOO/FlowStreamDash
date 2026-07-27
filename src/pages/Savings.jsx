@@ -10,6 +10,10 @@ export default function Savings() {
   const [selectedSn, setSelectedSn] = useState('__all__');
   const [rate, setRate] = useState('');
   const [currentRate, setCurrentRate] = useState(null);
+  const [nightRateVal, setNightRateVal] = useState('');
+  const [nightStart, setNightStart] = useState('23');
+  const [nightEnd, setNightEnd] = useState('6');
+  const [nightEnabled, setNightEnabled] = useState(false);
   const [range, setRange] = useState('7d');
   const [savings, setSavings] = useState(null);
   const [dailyData, setDailyData] = useState([]);
@@ -17,6 +21,11 @@ export default function Savings() {
 
   useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
   useEffect(() => { apiFetch('/savings/rate').then(r => { setCurrentRate(r); if(r)setRate(r.price_per_kwh.toString()); }); }, []);
+  useEffect(() => {
+    apiFetch('/savings/night-rate').then(r => {
+      if (r.enabled) { setNightEnabled(true); setNightRateVal(r.price_per_kwh.toString()); setNightStart(String(r.start_hour)); setNightEnd(String(r.end_hour)); }
+    });
+  }, []);
 
   useEffect(() => {
     if (!rate) return;
@@ -57,12 +66,25 @@ export default function Savings() {
           <h3>Electricity Rate</h3>
           <form onSubmit={saveRate} style={{display:'flex',gap:8,alignItems:'flex-end'}}>
             <div className="form-group" style={{flex:1,marginBottom:0}}>
-              <label>Price per kWh (£)</label>
+              <label>Day Rate (£/kWh)</label>
               <input type="number" step="0.01" min="0" value={rate} onChange={e=>setRate(e.target.value)} required/>
             </div>
-            <button className="btn btn-primary" style={{marginBottom:0}}>Save</button>
+            <button className="btn btn-primary btn-sm" style={{marginBottom:0}}>Save</button>
           </form>
           {currentRate&&<p style={{marginTop:10,fontSize:13,color:'var(--text-dim)'}}>Current: <strong>£{currentRate.price_per_kwh}/kWh</strong></p>}
+          
+          <div style={{marginTop:14,borderTop:'1px solid var(--border)',paddingTop:12}}>
+            <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:13,marginBottom:8}}>
+              <input type="checkbox" checked={nightEnabled} onChange={e=>setNightEnabled(e.target.checked)}/>
+              Night Rate (off-peak)
+            </label>
+            {nightEnabled && <form onSubmit={async e=>{e.preventDefault();await apiFetch('/savings/night-rate',{method:'POST',body:JSON.stringify({price_per_kwh:parseFloat(nightRateVal),start_hour:parseInt(nightStart),end_hour:parseInt(nightEnd)})});}} style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+              <div className="form-group" style={{width:100,marginBottom:0}}><label>Rate (£/kWh)</label><input type="number" step="0.01" min="0" value={nightRateVal} onChange={e=>setNightRateVal(e.target.value)}/></div>
+              <div className="form-group" style={{width:60,marginBottom:0}}><label>Start hr</label><input type="number" min="0" max="23" value={nightStart} onChange={e=>setNightStart(e.target.value)}/></div>
+              <div className="form-group" style={{width:60,marginBottom:0}}><label>End hr</label><input type="number" min="0" max="23" value={nightEnd} onChange={e=>setNightEnd(e.target.value)}/></div>
+              <button className="btn btn-primary btn-sm" style={{marginBottom:0}}>Save Night Rate</button>
+            </form>}
+          </div>
         </div>
         <div className="card">
           <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
