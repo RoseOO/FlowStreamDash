@@ -13,6 +13,19 @@ export default function Model() {
   useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
   useEffect(() => { if (devices.length>0&&!selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
+  async function trainModel() {
+    if (!selectedSn) return;
+    setLoading(true);
+    try {
+      const r = await apiFetch(`/model/${selectedSn}/train`, { method:'POST' });
+      alert(`Training complete: ${r.trained} new pairs, factor ×${r.modelFactor}`);
+      // Refresh
+      const [m, f] = await Promise.all([apiFetch(`/model/${selectedSn}`), apiFetch(`/forecast/${selectedSn}`)]);
+      setModel(m); setForecast(f);
+    } catch(e) { alert('Training failed: ' + e.message); }
+    setLoading(false);
+  }
+
   useEffect(() => {
     if (!selectedSn) return;
     setLoading(true);
@@ -58,6 +71,10 @@ export default function Model() {
           style={{padding:'8px 12px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontSize:13}}>
           {devices.map(d=><option key={d.sn} value={d.sn}>{d.name||d.sn}</option>)}
         </select>
+        <button className="btn btn-sm" onClick={trainModel} disabled={loading}
+          style={{marginLeft:8,background:'var(--accent2)',color:'#fff'}}>
+          {loading?'Training...':'🔄 Train Model'}
+        </button>
       </div>
 
       {model&&<>

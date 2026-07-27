@@ -20,7 +20,7 @@ export class GridMeter extends EventEmitter {
   start() {
     this.stop();
     if (!this.config?.enabled || !this.config?.ip) return;
-    const interval = 2000; // poll every 2s
+    const interval = (this.config.interval || 2) * 1000;
     this.timer = setInterval(() => this.poll(), interval);
     this.poll();
     console.log(`[GridMeter] Polling ESPHome at ${this.config.ip} every ${interval/1000}s`);

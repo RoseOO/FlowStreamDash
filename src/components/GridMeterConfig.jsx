@@ -44,7 +44,7 @@ export default function GridMeterConfig({ apiFetch }) {
           </div>
           <div className="form-group" style={{width:100,marginBottom:8}}>
             <label>Poll (sec)</label>
-            <input type="number" min="5" max="300" value={interval} onChange={e=>setInterval(e.target.value)}/>
+            <input type="number" min="1" max="300" value={interval} onChange={e=>setInterval(e.target.value)}/>
           </div>
         </div>
         <p style={{fontSize:11,color:'var(--text-dim)',marginBottom:8}}>

@@ -93,6 +93,12 @@ export default function Dashboard() {
   const totalSaving=savings?.totalSaving||0;
   const avgDaily=stats?.avgDailyKwh||todayKwh;
   const annualKwh=avgDaily*365;
+  const gridImport = gridPower?.w || 0;
+  const totalPv = livePV;
+  const totalDemand = totalPv + (gridImport > 0 ? gridImport : 0);
+  const pvPct = totalDemand > 0 ? Math.round(totalPv / Math.max(1, totalDemand) * 100) : 0;
+  const gridPct = totalDemand > 0 ? Math.round(gridImport / Math.max(1, totalDemand) * 100) : 0;
+  const isExporting = gridPower?.w != null && gridImport <= 5;
 
   function fmt(v,d=1){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
   function date(t){return t?new Date(t*1000).toLocaleDateString():'';}
@@ -100,6 +106,61 @@ export default function Dashboard() {
 
   return (
     <div>
+      {/* ── Live Power Flow Diagram ── */}
+      <div className="card" style={{marginBottom:12,padding:'14px 16px',background:'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card2) 100%)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:0,flexWrap:'wrap',minHeight:80}}>
+          {/* Solar source */}
+          <div style={{textAlign:'center',minWidth:70}}>
+            <div style={{fontSize:28}}>☀</div>
+            <div style={{fontSize:20,fontWeight:700,color:'var(--pv2)'}}>{totalPv.toFixed(0)}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
+            <div style={{fontSize:10,color:'var(--text-dim)'}}>Solar</div>
+          </div>
+
+          {/* Flow bar: Solar → Home */}
+          <div style={{flex:'1 1 100px',minWidth:60,height:24,margin:'0 8px',position:'relative'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,borderRadius:12,background:'var(--bg-card2)',overflow:'hidden',border:'1px solid var(--border)'}}>
+              <div className="flow-bar" style={{width:`${Math.max(5,pvPct)}%`,height:'100%',background:'linear-gradient(90deg, var(--pv2), #66BB6A)',borderRadius:12,transition:'width .5s',position:'relative'}}>
+                <div className="flow-dot" style={{position:'absolute',right:2,top:'50%',transform:'translateY(-50%)',width:8,height:8,borderRadius:'50%',background:'#fff',boxShadow:'0 0 8px #4CAF50'}}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Home/Load */}
+          <div style={{textAlign:'center',minWidth:80,background:totalDemand>0?'rgba(33,150,243,.1)':'transparent',borderRadius:12,padding:'6px 12px',border:'1px solid var(--border)'}}>
+            <div style={{fontSize:24}}>🏠</div>
+            <div style={{fontSize:22,fontWeight:700}}>{totalDemand>0?totalDemand.toFixed(0):'--'}<span style={{fontSize:13,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
+            <div style={{fontSize:10,color:'var(--text-dim)'}}>
+              {gridPower?.w!=null?<>{pvPct}% solar {isExporting?'· exporting':'· '+gridPct+'% grid'}</>:'Load'}
+            </div>
+          </div>
+
+          {/* Flow bar: Grid → Home or Home → Grid */}
+          <div style={{flex:'1 1 100px',minWidth:60,height:24,margin:'0 8px',position:'relative'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,borderRadius:12,background:'var(--bg-card2)',overflow:'hidden',border:'1px solid var(--border)'}}>
+              {gridImport > 5 ? (
+                <div className="flow-bar" style={{width:'100%',height:'100%',background:'linear-gradient(90deg, var(--warn), #FFA726)',borderRadius:12,transition:'width .5s'}}>
+                  <div className="flow-dot" style={{position:'absolute',animation:'flowRight .8s linear infinite',width:8,height:8,borderRadius:'50%',background:'#FF9800',boxShadow:'0 0 8px #FF9800'}}></div>
+                </div>
+              ) : isExporting ? (
+                <div className="flow-bar" style={{width:`${Math.max(5,100-pvPct)}%`,height:'100%',background:'linear-gradient(90deg, var(--accent), #66BB6A)',borderRadius:12,transition:'width .5s'}}>
+                  <div className="flow-dot" style={{position:'absolute',animation:'flowLeft .8s linear infinite',width:8,height:8,borderRadius:'50%',background:'#4CAF50',boxShadow:'0 0 8px #4CAF50'}}></div>
+                </div>
+              ) : (
+                <div style={{width:'0%',height:'100%',borderRadius:12}}></div>
+              )}
+            </div>
+          </div>
+
+          {/* Grid endpoint */}
+          <div style={{textAlign:'center',minWidth:70}}>
+            <div style={{fontSize:28}}>⚡</div>
+            <div style={{fontSize:20,fontWeight:700,color:gridImport>5?'var(--warn)':'var(--accent)'}}>
+              {gridImport>5?gridImport.toFixed(0):gridPower?.w!=null?'0':'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>W</span>
+            </div>
+            <div style={{fontSize:10,color:'var(--text-dim)'}}>{gridImport>5?'Importing':gridPower?.w!=null?(isExporting?'Exporting':'Idle'):'Grid'}</div>
+          </div>
+        </div>
+      </div>
       {/* ── Hero Banner ── */}
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
         {[{label:'Live Solar',val:livePV,unit:'W',color:'var(--pv2)'},

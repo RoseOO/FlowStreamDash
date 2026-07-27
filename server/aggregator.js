@@ -1,6 +1,6 @@
 // Hourly/daily aggregator and savings calculator
 
-import db, { getHistoricalData, saveHourly, getAggregates, getCurrentRate, getGridData } from './db.js';
+import db, { getHistoricalData, saveHourly, getAggregates, getCurrentRate, getGridData, getSetting } from './db.js';
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -44,6 +44,12 @@ export function runHourlyRollup(sn) {
 export function calculateSavings(sn, fromTs, toTs) {
   const rate = getCurrentRate();
   if (!rate) return { error: 'No electricity rate configured' };
+  let dayRate = rate.price_per_kwh;
+  // Check for night rate
+  const nightRateVal = parseFloat(db.default.prepare("SELECT value FROM settings WHERE key='night_rate'").get()?.value || '0');
+  const nightStart = parseInt(db.default.prepare("SELECT value FROM settings WHERE key='night_start'").get()?.value || '23');
+  const nightEnd = parseInt(db.default.prepare("SELECT value FROM settings WHERE key='night_end'").get()?.value || '6');
+  const hasNightRate = nightRateVal > 0;
 
   // Get PV production
   const pvRows = getHistoricalData(sn, fromTs, toTs, [361, 70]);
@@ -70,6 +76,11 @@ export function calculateSavings(sn, fromTs, toTs) {
       if (lastGridTs !== null) {
         const intervalHours = (row.ts - lastGridTs) / 3600;
         if (intervalHours > 0 && intervalHours < 1) {
+          const h = new Date(row.ts * 1000).getHours();
+          const isNight = nightStart > nightEnd
+            ? (h >= nightStart || h < nightEnd)  // e.g. 23-6
+            : (h >= nightStart && h < nightEnd);
+          const effectiveRate = (hasNightRate && isNight) ? nightRateVal : dayRate;
           if (row.power_w > 5) totalImportKwh += (row.power_w * intervalHours) / 1000;
           else if (row.power_w < -5) totalExportKwh += (Math.abs(row.power_w) * intervalHours) / 1000;
         }
@@ -95,6 +106,8 @@ export function calculateSavings(sn, fromTs, toTs) {
 
   return {
     rate: rate.price_per_kwh, currency: rate.currency || 'GBP',
+    nightRate: hasNightRate ? nightRateVal : null,
+    nightStart, nightEnd,
     totalPvKwh: round(totalPvKwh),
     totalImportKwh: round(totalImportKwh),
     totalExportKwh: round(totalExportKwh),

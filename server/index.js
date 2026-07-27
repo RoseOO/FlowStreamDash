@@ -1428,6 +1428,23 @@ app.get('/api/export/:sn', authMiddleware, (req, res) => {
   res.send(csvRows.join('\n'));
 });
 
+// ── Grid Meter Export ──────────────────────────────────────
+app.get('/api/export/grid-meter', authMiddleware, (req, res) => {
+  const { from, to } = req.query;
+  const fromTs = from ? parseInt(from) : 0;
+  const toTs = to ? parseInt(to) : Math.floor(Date.now()/1000);
+  const rows = db.getGridData(fromTs, toTs);
+  if (!rows || rows.length === 0) return res.status(404).json({ error: 'No grid meter data' });
+  const header = ['timestamp', 'power_w', 'energy_kwh'];
+  const csvRows = [header.join(',')];
+  for (const r of rows) {
+    csvRows.push(`${new Date(r.ts*1000).toISOString()},${r.power_w??''},${r.energy_kwh??''}`);
+  }
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="grid_meter.csv"');
+  res.send(csvRows.join('\n'));
+});
+
 // ── DB Backup / Restore ────────────────────────────────────
 app.get('/api/db/export', adminMiddleware, (req, res) => {
   if (!fs.existsSync(DB_PATH)) return res.status(404).json({ error: 'Database not found' });
@@ -1668,7 +1685,24 @@ async function autoTrain() {
             const radByHour = {};
             data.hourly.time.forEach((t, i) => {
               radByHour[new Date(t).getHours()] = data.hourly.shortwave_radiation[i] || 0;
-            });
+});
+
+app.post('/api/savings/night-rate', authMiddleware, (req, res) => {
+  const { price_per_kwh, start_hour, end_hour } = req.body;
+  if (price_per_kwh) db.setSetting('night_rate', String(price_per_kwh));
+  if (start_hour != null) db.setSetting('night_start', String(start_hour));
+  if (end_hour != null) db.setSetting('night_end', String(end_hour));
+  res.json({ success: true });
+});
+
+app.get('/api/savings/night-rate', authMiddleware, (req, res) => {
+  res.json({
+    enabled: db.getSetting('night_rate') ? true : false,
+    price_per_kwh: parseFloat(db.getSetting('night_rate') || '0'),
+    start_hour: parseInt(db.getSetting('night_start') || '23'),
+    end_hour: parseInt(db.getSetting('night_end') || '6'),
+  });
+});
             for (let h = 0; h < 24; h++) {
               const hourTs = dayStart + h * 3600;
               const rows = db.getHistoricalData(d.sn, hourTs, hourTs + 3599, [361, 70]);
@@ -1787,9 +1821,14 @@ setInterval(() => {
       for (const client of wss.clients) {
         if (client.readyState === 1) client.send(msg);
       }
-      // Alert if idle during expected generation hours (6am-9pm approximate)
+      // Alert only if device was generating recently (within last 6 hours) and suddenly stopped
+      // Don't alert at night or if already alerted recently
+      const alertCooldown = {}; // sn -> last alert timestamp
       const hour = new Date().getHours();
-      if (hour >= 6 && hour <= 21) {
+      const wasGenerating = deviceLastPower[sn] && (now - deviceLastPower[sn]) < 21600; // 6 hours
+      const lastAlert = alertCooldown[sn] || 0;
+      if (hour >= 6 && hour <= 21 && wasGenerating && (now - lastAlert) > 7200) {
+        alertCooldown[sn] = now;
         const alertMsg = JSON.stringify({ type: 'alert', sn, message: `No data from ${sn} for ${Math.round(idle/60)}min — possible fault`, level: 'warn' });
         for (const client of wss.clients) {
           if (client.readyState === 1) client.send(alertMsg);

@@ -16,10 +16,29 @@ export default function History() {
   const [panelConfig, setPanelConfig] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedFields, setSelectedFields] = useState([361, 70, 616]);
+  const [gridData, setGridData] = useState([]);
 
   useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
   useEffect(() => { if (devices.length>0 && !selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
   useEffect(() => { if (selectedSn) apiFetch(`/settings/panels/${selectedSn}`).then(setPanelConfig); }, [selectedSn]);
+
+  // Fetch grid meter data separately
+  useEffect(() => {
+    if (!selectedSn) return;
+    const now = Math.floor(Date.now()/1000);
+    const ranges = { '1h':3600, '6h':21600, '24h':86400, '7d':7*86400, '30d':30*86400, '90d':90*86400, '365d':365*86400 };
+    let from, to;
+    if (range === 'custom' && customFrom) {
+      from = Math.floor(new Date(customFrom).getTime()/1000);
+      to = customTo ? Math.floor(new Date(customTo).getTime()/1000) : now;
+    } else {
+      from = now - (ranges[range] || 86400); to = now;
+    }
+    // Fetch grid meter data
+    apiFetch(`/grid-meter/history?from=${from}&to=${to}`)
+      .then(rows => setGridData(rows || []))
+      .catch(() => setGridData([]));
+  }, [selectedSn, range, customFrom, customTo]);
 
   useEffect(() => {
     if (!selectedSn) return;
@@ -77,6 +96,21 @@ export default function History() {
     });
   }, [chartData, panelConfig, selectedFields]);
 
+  // Merge grid data into chart data when grid field selected
+  const displayData = useMemo(() => {
+    let base = chartDataWithEff;
+    if (selectedFields.includes(801) && gridData.length) {
+      const byTs = {};
+      for (const pt of base) byTs[Math.round(pt.ts/1000)] = { ...pt };
+      for (const r of gridData) {
+        if (!byTs[r.ts]) byTs[r.ts] = { ts: r.ts * 1000 };
+        byTs[r.ts].f801 = r.power_w;
+      }
+      base = Object.values(byTs).sort((a,b) => a.ts - b.ts);
+    }
+    return base;
+  }, [chartDataWithEff, gridData, selectedFields]);
+
   function toggleField(f) {
     setSelectedFields(prev => prev.includes(f)?prev.filter(x=>x!==f):[...prev,f]);
   }
@@ -87,8 +121,10 @@ export default function History() {
   const effFields = [];
   if (pv1Rated) effFields.push({ f:901, label:'PV1 Efficiency %' });
   if (pv2Rated) effFields.push({ f:902, label:'PV2 Efficiency %' });
-  const allFieldOpts = [...fieldOptions, ...effFields.map(e=>e.f)];
-  const colors = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548','#FFC107','#607D8B'];
+  // Grid meter fields
+  const gridFields = [{ f:801, label:'Grid Import (W)' }];
+  const allFieldOpts = [...fieldOptions, ...effFields.map(e=>e.f), ...gridFields.map(e=>e.f)];
+  const colors = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548','#FFC107','#607D8B','#E91E63','#FF5722'];
 
   return (
     <div>
@@ -130,13 +166,20 @@ export default function History() {
               {e.label}
             </button>
           ))}
+          {gridFields.map((e,i)=>(
+            <button key={e.f} onClick={()=>toggleField(e.f)} className="btn btn-sm"
+              style={{background:selectedFields.includes(e.f)?colors[(fieldOptions.length+effFields.length+i)%colors.length]:'var(--bg-card2)',
+                color:selectedFields.includes(e.f)?'#fff':'var(--text-dim)',opacity:selectedFields.includes(e.f)?1:.6}}>
+              {e.label}
+            </button>
+          ))}
         </div>
 
         {loading?<div className="loading"><div className="spinner"></div></div>:
-          chartDataWithEff.length===0?<p style={{color:'var(--text-dim)',textAlign:'center',padding:40}}>No data for this period yet. Keep monitoring for a while and data will accumulate.</p>:
+          displayData.length===0?<p style={{color:'var(--text-dim)',textAlign:'center',padding:40}}>No data for this period yet. Keep monitoring for a while and data will accumulate.</p>:
           <div style={{width:'100%',height:400}}>
             <ResponsiveContainer>
-              <LineChart animationDuration={0} data={chartDataWithEff}>
+              <LineChart animationDuration={0} data={displayData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                 <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}}
                   tickFormatter={ts=>new Date(ts).toLocaleString().slice(0, range==='1h'?5:16)}/>
@@ -145,7 +188,7 @@ export default function History() {
                   contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
                 <Legend/>
                 {selectedFields.map((f,i)=>{
-                  const label = f===901?'PV1 Efficiency %':f===902?'PV2 Efficiency %':getFieldLabel(f);
+                  let label = f===901?'PV1 Efficiency %':f===902?'PV2 Efficiency %':f===801?'Grid Import (W)':getFieldLabel(f);
                   return <Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`}
                     stroke={colors[i%colors.length]} name={label} dot={false}
                     strokeWidth={1.5} connectNulls={true}/>
