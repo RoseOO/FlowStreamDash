@@ -122,10 +122,21 @@ export default function Dashboard() {
       {(pv1Rated>0||pv2Rated>0) && (
         <div className="grid-2" style={{marginBottom:12}}>
           {pv1Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv1;const ydl=stats?.yesterday?.daylight?.pv1;
-            // Estimate end time from yesterday if today hasn't finished generating
-            const estEnd = (!dl?.lastMinute && ydl?.lastMinute) ? ydl.lastMinute : null;
-            const window = dl?.window || '--';
-            const showEst = estEnd && dl?.firstMinute != null;
+            const hasStarted = dl?.firstMinute != null;
+            const hasStopped = dl?.lastMinute != null;
+            const yestEnd = ydl?.lastMinute;
+            // If generating now: show today start ~ yesterday end (estimated)
+            // If not started: show yesterday's full window as reference
+            // If complete: show today's actual window
+            let genText = dl?.window || '--';
+            let genLabel = 'Gen Window';
+            if (hasStarted && !hasStopped && yestEnd) {
+              genText = `${minuteToStr(dl.firstMinute)}~${minuteToStr(yestEnd)}`;
+              genLabel = 'Gen Window (est)';
+            } else if (!hasStarted && ydl?.window) {
+              genText = `Yesterday: ${ydl.window}`;
+              genLabel = 'Gen Window (yest)';
+            }
             return(
             <div className="card" style={{padding:16}}>
               <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV1 Performance</div>
@@ -143,17 +154,26 @@ export default function Dashboard() {
                   <div style={{fontSize:22,fontWeight:600,color:dl?.daylightEff>70?'var(--accent)':dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'}}>{dl?.daylightEff!=null?fmt(dl.daylightEff,1):'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
                 </div>
                 <div style={{flex:1,minWidth:90}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Gen Window{showEst?' (est)':''}</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{showEst ? `${dl.firstMinute != null ? minuteToStr(dl.firstMinute) : '--'}~${minuteToStr(estEnd)}` : window}</div>
+                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>{genLabel}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{genText}</div>
                   <div style={{fontSize:10,color:'var(--text-dim)'}}>{dl?.genHours||0} daylight hrs · {pv1Rated}W rated · {fmt(pv1v,1)}V · {fmt(pv1a,2)}A</div>
                 </div>
               </div>
             </div>
           )})()}
           {pv2Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv2;const ydl=stats?.yesterday?.daylight?.pv2;
-            const estEnd = (!dl?.lastMinute && ydl?.lastMinute) ? ydl.lastMinute : null;
-            const window = dl?.window || '--';
-            const showEst = estEnd && dl?.firstMinute != null;
+            const hasStarted = dl?.firstMinute != null;
+            const hasStopped = dl?.lastMinute != null;
+            const yestEnd = ydl?.lastMinute;
+            let genText = dl?.window || '--';
+            let genLabel = 'Gen Window';
+            if (hasStarted && !hasStopped && yestEnd) {
+              genText = `${minuteToStr(dl.firstMinute)}~${minuteToStr(yestEnd)}`;
+              genLabel = 'Gen Window (est)';
+            } else if (!hasStarted && ydl?.window) {
+              genText = `Yesterday: ${ydl.window}`;
+              genLabel = 'Gen Window (yest)';
+            }
             return(
             <div className="card" style={{padding:16}}>
               <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV2 Performance</div>
@@ -171,8 +191,8 @@ export default function Dashboard() {
                   <div style={{fontSize:22,fontWeight:600,color:dl?.daylightEff>70?'var(--accent)':dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'}}>{dl?.daylightEff!=null?fmt(dl.daylightEff,1):'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
                 </div>
                 <div style={{flex:1,minWidth:90}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Gen Window{showEst?' (est)':''}</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{showEst ? `${dl.firstMinute != null ? minuteToStr(dl.firstMinute) : '--'}~${minuteToStr(estEnd)}` : window}</div>
+                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>{genLabel}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{genText}</div>
                   <div style={{fontSize:10,color:'var(--text-dim)'}}>{dl?.genHours||0} daylight hrs · {pv2Rated}W rated · {fmt(pv2v,1)}V · {fmt(pv2a,2)}A</div>
                 </div>
               </div>
