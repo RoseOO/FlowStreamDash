@@ -173,6 +173,12 @@ export default function Setup({ onLogin, apiFetch }) {
             ✅ Connected as <strong>{efStatus.email}</strong><br/>
             {efStatus.connected?'🟢 Online':'🔴 Offline'}
             {efStatus.stats&&<> — {efStatus.stats.msgCount} msgs</>}
+            {efStatus.hasStoredPassword&&<><br/>🔐 Credentials stored for auto-refresh</>}
+          </div>
+        )}
+        {efStatus?.configured && !efStatus?.hasStoredPassword && (
+          <div style={{background:'rgba(255,152,0,.1)',padding:'10px 14px',borderRadius:8,marginBottom:14,fontSize:13}}>
+            ⚠️ Credentials not stored. Re-enter password to enable auto-refresh.
           </div>
         )}
         {efError&&<div className="error">{efError}</div>}
