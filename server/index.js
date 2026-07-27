@@ -13,7 +13,7 @@ import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, getCsvLabel
 import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggregator.js';
 import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
 import { GridMeter } from './grid-meter.js';
-import { fetchQuotaData, listDevices, verifyCredentials, getDevMqttCert } from './dev-api.js';
+import { getDevMqttCert, verifyCredentials, listDevices, fetchQuotaData } from './dev-api.js';
 import fs from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -467,7 +467,7 @@ app.post('/api/devapi/sync-devices', authMiddleware, async (req, res) => {
   }
 });
 
-// Quota poller — fetch full device data every 30s via Developer HTTP API
+// ── Dev API quota poller (every 60s, POST-based) ───────────
 let quotaTimer = null;
 async function pollQuotaData() {
   const devices = db.getDevices();
@@ -475,22 +475,20 @@ async function pollQuotaData() {
     try {
       const fields = await fetchQuotaData(d.sn);
       if (!fields) continue;
-      // Push to WebSocket clients
-      const wsMsg = JSON.stringify({ type: 'data', sn: d.sn, fields, ts: Math.floor(Date.now()/1000), source: 'devapi' });
+      const wsMsg = JSON.stringify({ type: 'devapi', sn: d.sn, fields, ts: Math.floor(Date.now()/1000) });
       for (const client of wss.clients) {
         if (client.readyState === 1) client.send(wsMsg);
       }
     } catch {}
   }
 }
-
-function startQuotaPoller() {
-  if (quotaTimer) clearInterval(quotaTimer);
-  if (!db.getSetting('dev_api_access_key')) return;
-  quotaTimer = setInterval(pollQuotaData, 30000);
-  pollQuotaData(); // First poll immediately
-}
-setTimeout(startQuotaPoller, 10000); // Start 10s after server init
+setTimeout(() => {
+  if (db.getSetting('dev_api_access_key')) {
+    console.log('[DevAPI] Starting quota poller');
+    quotaTimer = setInterval(pollQuotaData, 60000);
+    pollQuotaData();
+  }
+}, 20000);
 
 // ── Device Routes ───────────────────────────────────────────
 app.get('/api/devices', authMiddleware, (req, res) => {
@@ -1369,18 +1367,21 @@ app.get('/api/grid-meter/history', authMiddleware, (req, res) => {
   res.json(db.getGridData(fromTs, toTs));
 });
 
-// Auto-start grid meter on startup
-(async () => {
-  if (db.getSetting('grid_meter_enabled') === 'true') {
-    const ip = db.getSetting('grid_meter_ip');
-    if (ip) {
-      gridMeter.configure({
-        enabled: true, ip,
-        interval: parseInt(db.getSetting('grid_meter_interval') || '10'),
-      });
+// Auto-start grid meter on startup (delay for server init)
+setTimeout(() => {
+  try {
+    if (db.getSetting('grid_meter_enabled') === 'true') {
+      const ip = db.getSetting('grid_meter_ip');
+      if (ip) {
+        console.log(`[GridMeter] Auto-starting with IP ${ip}`);
+        gridMeter.configure({
+          enabled: true, ip,
+          interval: parseInt(db.getSetting('grid_meter_interval') || '2'),
+        });
+      }
     }
-  }
-})();
+  } catch(e) { console.error('[GridMeter] Auto-start error:', e); }
+}, 5000);
 
 // ── Export Routes ───────────────────────────────────────────
 app.get('/api/export/:sn', authMiddleware, (req, res) => {
@@ -1768,12 +1769,12 @@ setInterval(async () => {
   if (mqttClient.connected && mqttClient.lastDataTime) {
     const idle = (Date.now() / 1000) - mqttClient.lastDataTime;
     if (idle > 45) {
-      console.log(`[MQTT] No data for ${Math.round(idle)}s — reconnecting`);
+      const hour = new Date().getHours();
+      const isDaytime = hour >= 6 && hour <= 21;
+      if (isDaytime) console.log(`[MQTT] No data for ${Math.round(idle)}s — reconnecting`);
       mqttFailCount++;
       mqttLastFailTime = Date.now();
-      // After 3 failed reconnects + 60s of no data, refresh credentials
-      if (mqttFailCount >= 3 && idle > 60) {
-        console.log('[MQTT] Multiple failures — refreshing credentials...');
+      if (mqttFailCount >= 3 && idle > 60 && isDaytime) {
         const refreshed = await autoRefreshCredentials();
         if (!refreshed) restartMqtt();
       } else {
@@ -1781,16 +1782,13 @@ setInterval(async () => {
       }
     }
   } else if (!mqttClient.connected) {
-    // Track disconnected time for credential refresh
     if (!mqttLastFailTime) mqttLastFailTime = Date.now();
     const disconnectedSec = (Date.now() - mqttLastFailTime) / 1000;
     if (disconnectedSec > 90 && mqttFailCount < 3) {
       mqttFailCount = 3;
-      console.log('[MQTT] Disconnected for 90s — refreshing credentials...');
       await autoRefreshCredentials();
     }
   } else {
-    // Connected and receiving data — reset fail count
     if (mqttFailCount > 0 && mqttClient.lastDataTime && (Date.now()/1000 - mqttClient.lastDataTime) < 10) {
       mqttFailCount = 0;
       mqttLastFailTime = 0;

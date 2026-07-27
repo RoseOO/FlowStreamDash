@@ -35,22 +35,37 @@ export class GridMeter extends EventEmitter {
     try {
       const base = `http://${this.config.ip}`;
       const results = {};
+      let errors = 0;
 
-      // Fetch known ESPHome POWCT sensors
       const sensors = ['power', 'voltage', 'current', 'total_daily_energy', 'power_factor'];
       for (const id of sensors) {
         try {
-          const r = await fetch(`${base}/sensor/${id}`, { signal: AbortSignal.timeout(3000) });
-          if (!r.ok) continue;
+          const r = await fetch(`${base}/sensor/${id}`, { signal: AbortSignal.timeout(2000) });
+          if (!r.ok) { errors++; continue; }
           const data = await r.json();
-          if (data.value != null) results[id] = data.value;
-        } catch { /* sensor may not exist */ }
+          if (data.value != null) {
+            results[id] = data.value;
+          } else if (data.state) {
+            // Some ESPHome versions return state as string like "830 W"
+            const num = parseFloat(data.state);
+            if (!isNaN(num)) results[id] = num;
+          }
+        } catch { errors++; }
+      }
+
+      if (errors === sensors.length) {
+        // All failed — log once per minute
+        if (!this._lastErrLog || Date.now() - this._lastErrLog > 60000) {
+          console.error(`[GridMeter] All ${errors} sensors failed — device unreachable at ${this.config.ip}`);
+          this._lastErrLog = Date.now();
+        }
+        return;
       }
 
       if (Object.keys(results).length === 0) return;
 
       const now = Math.floor(Date.now() / 1000);
-      const power = results.power ?? null; // Raw value now directly reflects import (positive=import)
+      const power = results.power ?? null;
       const energy = results.total_daily_energy ?? null;
       const voltage = results.voltage ?? null;
       const current = results.current ?? null;
@@ -58,7 +73,10 @@ export class GridMeter extends EventEmitter {
       this.lastData = { ts: now, power_w: power, energy_kwh: energy, voltage_v: voltage, current_a: current };
       this.emit('data', this.lastData);
     } catch (e) {
-      // Silent — device might be offline
+      if (!this._lastErrLog || Date.now() - this._lastErrLog > 60000) {
+        console.error(`[GridMeter] Poll error: ${e.message}`);
+        this._lastErrLog = Date.now();
+      }
     }
   }
 }

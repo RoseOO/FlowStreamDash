@@ -36,7 +36,7 @@ function signedHeaders(accessKey, secretKey, params = {}) {
 }
 
 // ── API Calls ───────────────────────────────────────────────
-async function apiCall(path, params = {}) {
+async function apiCall(path, params = {}, method = 'GET') {
   const accessKey = getSetting('dev_api_access_key');
   const secretKey = getSetting('dev_api_secret_key');
   if (!accessKey || !secretKey) throw new Error('Developer API credentials not configured');
@@ -50,8 +50,10 @@ async function apiCall(path, params = {}) {
     sign: headers.sign,
   });
   const url = `${API_BASE}${path}?${query}`;
-  console.log('[DevAPI] Calling:', url.substring(0, 100) + '...');
-  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  const fetchOpts = { method, headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' } };
+  if (method === 'POST') fetchOpts.body = JSON.stringify(params);
+  console.log('[DevAPI]', method, url.substring(0, 120) + '...');
+  const res = await fetch(url, fetchOpts);
   if (!res.ok) {
     const body = await res.text();
     console.error('[DevAPI] Error response:', res.status, body.substring(0, 500));
@@ -93,7 +95,7 @@ const STRING_KEYS = new Set(['countryCode', 'gridCodeVersion']);
 
 export async function fetchQuotaData(sn) {
   try {
-    const resp = await apiCall('/iot-open/sign/device/quota', { sn });
+    const resp = await apiCall('/iot-open/sign/device/quota', { sn }, 'POST');
     const quota = resp?.data || resp?.quota || resp || {};
     // Map named keys to field numbers
     const fields = {};
