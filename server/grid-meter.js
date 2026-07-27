@@ -62,8 +62,10 @@ export class GridMeter extends EventEmitter {
 
         for (const line of lines) {
           if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload.startsWith('{')) continue; // skip non-JSON log events
           try {
-            const d = JSON.parse(line.slice(5).trim());
+            const d = JSON.parse(payload);
             if (d.id && d.value != null) {
               const name = d.id.replace('sensor-', '').replace('binary_sensor-', '');
               results[name] = d.value;

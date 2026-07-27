@@ -103,7 +103,9 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS grid_meter_data (
     ts INTEGER PRIMARY KEY,
     power_w REAL,
-    energy_kwh REAL
+    energy_kwh REAL,
+    voltage_v REAL,
+    current_a REAL
   );
   CREATE INDEX IF NOT EXISTS idx_grid_ts ON grid_meter_data(ts);
 
@@ -124,6 +126,8 @@ db.exec(`
 try { db.exec('ALTER TABLE hourly ADD COLUMN total_val REAL'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE daily ADD COLUMN total_val REAL'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE grid_meter_data ADD COLUMN voltage_v REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE grid_meter_data ADD COLUMN current_a REAL'); } catch (e) { /* already exists */ }
 
 export function getSetting(key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -200,12 +204,12 @@ export function getAccuracyStats(sn, days=30) {
 }
 
 // ── Grid Meter ──────────────────────────────────────────────
-export function insertGridReading(ts, powerW, energyKwh) {
-  db.prepare('INSERT OR REPLACE INTO grid_meter_data (ts, power_w, energy_kwh) VALUES (?,?,?)')
-    .run(ts, powerW, energyKwh);
+export function insertGridReading(ts, powerW, energyKwh, voltageV, currentA) {
+  db.prepare('INSERT OR REPLACE INTO grid_meter_data (ts, power_w, energy_kwh, voltage_v, current_a) VALUES (?,?,?,?,?)')
+    .run(ts, powerW, energyKwh, voltageV, currentA);
 }
 export function getGridData(fromTs, toTs) {
-  return db.prepare('SELECT ts, power_w, energy_kwh FROM grid_meter_data WHERE ts>=? AND ts<=? ORDER BY ts ASC')
+  return db.prepare('SELECT ts, power_w, energy_kwh, voltage_v, current_a FROM grid_meter_data WHERE ts>=? AND ts<=? ORDER BY ts ASC')
     .all(fromTs, toTs);
 }
 export function getLatestGridReading() {

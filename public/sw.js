@@ -20,6 +20,9 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Skip chrome-extension and non-HTTP requests
+  if (!e.request.url.startsWith('http')) return;
+
   // Never cache API calls — always go to network
   if (e.request.url.includes('/api/')) return;
 

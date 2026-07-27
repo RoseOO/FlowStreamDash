@@ -105,6 +105,8 @@ export default function History() {
       for (const r of gridData) {
         if (!byTs[r.ts]) byTs[r.ts] = { ts: r.ts * 1000 };
         byTs[r.ts].f801 = r.power_w;
+        if (r.voltage_v != null) byTs[r.ts].f802 = r.voltage_v;
+        if (r.current_a != null) byTs[r.ts].f803 = r.current_a;
       }
       base = Object.values(byTs).sort((a,b) => a.ts - b.ts);
     }
@@ -122,7 +124,11 @@ export default function History() {
   if (pv1Rated) effFields.push({ f:901, label:'PV1 Efficiency %' });
   if (pv2Rated) effFields.push({ f:902, label:'PV2 Efficiency %' });
   // Grid meter fields
-  const gridFields = [{ f:801, label:'Grid Import (W)' }];
+  const gridFields = [
+    { f:801, label:'Grid Import (W)' },
+    { f:802, label:'Grid Voltage (V)' },
+    { f:803, label:'Grid Current (A)' },
+  ];
   const allFieldOpts = [...fieldOptions, ...effFields.map(e=>e.f), ...gridFields.map(e=>e.f)];
   const colors = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548','#FFC107','#607D8B','#E91E63','#FF5722'];
 
@@ -188,7 +194,7 @@ export default function History() {
                   contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
                 <Legend/>
                 {selectedFields.map((f,i)=>{
-                  let label = f===901?'PV1 Efficiency %':f===902?'PV2 Efficiency %':f===801?'Grid Import (W)':getFieldLabel(f);
+                  let label = f===901?'PV1 Efficiency %':f===902?'PV2 Efficiency %':f===801?'Grid Import (W)':f===802?'Grid Voltage (V)':f===803?'Grid Current (A)':getFieldLabel(f);
                   return <Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`}
                     stroke={colors[i%colors.length]} name={label} dot={false}
                     strokeWidth={1.5} connectNulls={true}/>

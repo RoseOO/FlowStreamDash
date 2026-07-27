@@ -1371,9 +1371,10 @@ app.get('/api/system/health', authMiddleware, (req, res) => {
 // ── Grid Meter (ESPHome Sonoff POWCT) ──────────────────────
 const gridMeter = new GridMeter();
 
-gridMeter.on('data', ({ ts, power_w, energy_kwh }) => {
+gridMeter.on('data', (data) => {
+  const { ts, power_w, energy_kwh, voltage_v, current_a } = data;
   if (power_w != null || energy_kwh != null) {
-    try { db.insertGridReading(ts, power_w, energy_kwh); } catch {}
+    try { db.insertGridReading(ts, power_w, energy_kwh, voltage_v, current_a); } catch {}
   }
   // Broadcast to WebSocket clients
   const msg = JSON.stringify({ type: 'grid', ts, power_w, energy_kwh, voltage_v, current_a });

@@ -121,6 +121,8 @@ a:hover { text-decoration: underline; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes flowRight { from { left: 0; } to { left: calc(100% - 8px); } }
 @keyframes flowLeft  { from { right: 0; } to { right: calc(100% - 8px); } }
+.flow-bar { position: relative; overflow: hidden; }
+.flow-dot { position: absolute; top: 50%; transform: translateY(-50%); width: 8px; height: 8px; border-radius: 50%; }
 
 /* Error / Badge */
 .error { background: rgba(244,67,54,.15); color: var(--danger); padding: 10px 14px; border-radius: var(--radius); font-size: 12px; margin-bottom: 12px; }
