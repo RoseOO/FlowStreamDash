@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, formatValue } from '../../server/fields';
@@ -55,7 +55,13 @@ export default function DeviceDetail() {
           if(!byTs[r.ts])byTs[r.ts]={ts:r.ts*1000};
           byTs[r.ts][`f${r.field_num}`]=r.value_num;
         }
-        setHistory(Object.values(byTs).sort((a,b)=>a.ts-b.ts));
+        const sorted = Object.values(byTs).sort((a,b)=>a.ts-b.ts);
+        // Add efficiency fields (computed)
+        for (const pt of sorted) {
+          if (pv1Rated > 0 && pt.f361 != null) pt.fe1 = Math.round(pt.f361 / pv1Rated * 1000) / 10;
+          if (pv2Rated > 0 && pt.f70 != null) pt.fe2 = Math.round(pt.f70 / pv2Rated * 1000) / 10;
+        }
+        setHistory(sorted);
       })
       .catch(err => console.error('[DeviceDetail] History fetch failed:', err));
   }, [sn, customGraphFields.join(','), graphRange, customFrom, customTo]);
@@ -67,6 +73,9 @@ export default function DeviceDetail() {
     setHistory(prev=>{
       const pt={ts:ld._ts*1000};
       for(const f of allGraphFields) pt[`f${f}`]=ld[f];
+      // Compute live efficiency
+      if (pv1Rated>0 && ld[361]!=null) pt.fe1 = Math.round(ld[361]/pv1Rated*1000)/10;
+      if (pv2Rated>0 && ld[70]!=null) pt.fe2 = Math.round(ld[70]/pv2Rated*1000)/10;
       const next=[...prev,pt];
       return next.filter(p=>p.ts>=Date.now()-lookback*1000).slice(-3000);
     });
@@ -101,6 +110,25 @@ export default function DeviceDetail() {
   const pv2Rated = parseInt(panelConfig.pv2_rated_watts) || 0;
   const pv1Eff = pv1Rated > 0 && ld[361] > 0 ? (ld[361] / pv1Rated * 100) : null;
   const pv2Eff = pv2Rated > 0 && ld[70] > 0 ? (ld[70] / pv2Rated * 100) : null;
+
+  // Average performance stats from history data
+  const p1Stats = useMemo(() => {
+    const pts = history.filter(p => p.f361 > 0);
+    if (pts.length === 0) return null;
+    const avg = pts.reduce((a,b) => a + b.f361, 0) / pts.length;
+    const avgEff = pv1Rated > 0 ? avg / pv1Rated * 100 : 0;
+    const peak = Math.max(...pts.map(p => p.f361));
+    return { avg: Math.round(avg*10)/10, avgEff: Math.round(avgEff*10)/10, peak };
+  }, [history, pv1Rated]);
+
+  const p2Stats = useMemo(() => {
+    const pts = history.filter(p => p.f70 > 0);
+    if (pts.length === 0) return null;
+    const avg = pts.reduce((a,b) => a + b.f70, 0) / pts.length;
+    const avgEff = pv2Rated > 0 ? avg / pv2Rated * 100 : 0;
+    const peak = Math.max(...pts.map(p => p.f70));
+    return { avg: Math.round(avg*10)/10, avgEff: Math.round(avgEff*10)/10, peak };
+  }, [history, pv2Rated]);
 
   if(!device)return<div className="loading"><div className="spinner"></div></div>;
   const name=device.name||sn;
@@ -155,6 +183,12 @@ export default function DeviceDetail() {
               style={{padding:'4px 8px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
           </>}
         </div>
+        <div className="grid-4" style={{marginBottom:8}}>
+          {p1Stats && <div className="stat-card" style={{textAlign:'center'}}><div className="label">PV1 Avg W</div><div style={{fontSize:16,fontWeight:700,color:'var(--pv1)'}}>{fmt(p1Stats.avg)}<span className="unit">W</span></div></div>}
+          {p1Stats && <div className="stat-card" style={{textAlign:'center'}}><div className="label">PV1 Avg Eff</div><div style={{fontSize:16,fontWeight:700,color:'var(--pv1)'}}>{fmt(p1Stats.avgEff,1)}<span className="unit">%</span></div></div>}
+          {p2Stats && <div className="stat-card" style={{textAlign:'center'}}><div className="label">PV2 Avg W</div><div style={{fontSize:16,fontWeight:700,color:'var(--pv2)'}}>{fmt(p2Stats.avg)}<span className="unit">W</span></div></div>}
+          {p2Stats && <div className="stat-card" style={{textAlign:'center'}}><div className="label">PV2 Avg Eff</div><div style={{fontSize:16,fontWeight:700,color:'var(--pv2)'}}>{fmt(p2Stats.avgEff,1)}<span className="unit">%</span></div></div>}
+        </div>
         <div className="grid-2" style={{marginBottom:0}}>
         <div className="card"><h3>PV & Grid Power (W)</h3>
           <div className="chart-container"><ResponsiveContainer>
@@ -191,6 +225,21 @@ export default function DeviceDetail() {
             </LineChart>
           </ResponsiveContainer></div>
         </div>
+        {/* PV Efficiency chart */}
+        {(pv1Rated>0||pv2Rated>0) && (
+          <div className="card"><h3>PV Efficiency (%)</h3>
+            <div className="chart-container"><ResponsiveContainer>
+              <LineChart animationDuration={0} data={history}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+                <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
+                <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}} domain={[0,'auto']}/>
+                <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}} formatter={v=>[`${v}%`]} /><Legend/>
+                {pv1Rated>0 && <Line isAnimationActive={false} type="monotone" dataKey="fe1" stroke="#2196F3" name="PV1 Eff %" dot={false} strokeWidth={1.5} connectNulls={true}/>}
+                {pv2Rated>0 && <Line isAnimationActive={false} type="monotone" dataKey="fe2" stroke="#4CAF50" name="PV2 Eff %" dot={false} strokeWidth={1.5} connectNulls={true}/>}
+              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
+              </LineChart>
+            </ResponsiveContainer></div>
+          </div>
+        )}
         {/* Custom graph */}
         {customGraphFields.length>0&&(
           <div className="card"><h3>Selected Fields {customGraphFields.map(f=>(<span key={f} style={{fontSize:11,marginLeft:6,color:'var(--text-dim)',cursor:'pointer'}} onClick={()=>toggleCustomField(f)}>✕ {getFieldLabel(f)}</span>))}</h3>

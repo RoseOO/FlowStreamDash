@@ -14,6 +14,7 @@ import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggr
 import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
 import { GridMeter } from './grid-meter.js';
 import { getDevMqttCert, verifyCredentials, listDevices, fetchAllQuota } from './dev-api.js';
+import { verifyBrightCredentials, backfillGridData } from './bright-api.js';
 import fs from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -477,6 +478,41 @@ app.post('/api/devapi/sync-devices', authMiddleware, async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// ── Bright/Glowmarkt SMETS2 Meter ──────────────────────────
+app.post('/api/bright/configure', authMiddleware, async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+  try {
+    const ok = await verifyBrightCredentials(username, password);
+    if (!ok) return res.status(400).json({ error: 'Invalid credentials' });
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.get('/api/bright/status', authMiddleware, (req, res) => {
+  res.json({
+    configured: !!(db.getSetting('bright_username')),
+    username: db.getSetting('bright_username') || '',
+  });
+});
+
+app.post('/api/bright/backfill', authMiddleware, async (req, res) => {
+  const { from, to } = req.body;
+  const fromTs = from || Math.floor(Date.now()/1000 - 365*86400);
+  const toTs = to || Math.floor(Date.now()/1000);
+  try {
+    const result = await backfillGridData(fromTs, toTs);
+    if (result.error) return res.status(400).json(result);
+    // Store backfilled data in DB
+    if (result.rows) {
+      for (const r of result.rows) {
+        try { db.insertGridReading(r.ts, r.power_w, r.energy_kwh); } catch {}
+      }
+    }
+    res.json({ success: true, readings: result.readings, sample: result.sample });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // ── Dev API quota poller (every 60s, GET quota/all) ────────

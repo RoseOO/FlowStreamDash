@@ -6,6 +6,7 @@ import WeatherConfig from '../components/WeatherConfig';
 import HaMqttConfig from '../components/HaMqttConfig';
 import GridMeterConfig from '../components/GridMeterConfig';
 import DevApiConfig from '../components/DevApiConfig';
+import BrightConfig from '../components/BrightConfig';
 
 export default function Setup({ onLogin, apiFetch }) {
   const auth = useAuth();
@@ -248,6 +249,12 @@ export default function Setup({ onLogin, apiFetch }) {
         <h2>Grid Meter</h2>
         <p style={{fontSize:13,color:'var(--text-dim)',marginBottom:12}}>Connect an ESPHome Sonoff POW Ring to get real grid import/export data for accurate savings.</p>
         <GridMeterConfig apiFetch={auth.apiFetch} />
+      </div>
+
+      {/* Bright SMETS2 Meter */}
+      <div className="card">
+        <h2>SMETS2 Smart Meter (Bright)</h2>
+        <BrightConfig apiFetch={auth.apiFetch} />
       </div>
 
       {/* User Management (admin only) */}
