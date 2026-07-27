@@ -79,18 +79,28 @@ export async function backfillGridData(fromTs, toTs) {
 
     if (!consumptionResId) return { error: 'No electricity consumption resource found' };
 
-    // Fetch daily readings
-    const readings = await getReadings(consumptionResId, fromTs, toTs, 'P1D');
-    const exportReadings = exportResId ? await getReadings(exportResId, fromTs, toTs, 'P1D') : [];
+    // Batch into 31-day chunks (Bright API limit)
+    const CHUNK_DAYS = 30;
+    const chunkSec = CHUNK_DAYS * 86400;
+    let totalReadings = 0;
+    const allRows = [];
 
-    // Store as estimated power (daily kWh → average watts over 24h)
-    const rows = [];
-    for (const [ts, kwh] of readings) {
-      const avgWatts = Math.round((kwh / 24) * 1000); // daily kWh → avg watts
-      rows.push({ ts, power_w: avgWatts, energy_kwh: kwh, source: 'bright' });
+    for (let chunkStart = fromTs; chunkStart < toTs; chunkStart += chunkSec) {
+      const chunkEnd = Math.min(chunkStart + chunkSec, toTs);
+      try {
+        const readings = await getReadings(consumptionResId, chunkStart, chunkEnd, 'P1D');
+        for (const [ts, kwh] of readings) {
+          const avgWatts = Math.round((kwh / 24) * 1000);
+          allRows.push({ ts, power_w: avgWatts, energy_kwh: kwh, source: 'bright' });
+          totalReadings++;
+        }
+        console.log(`[Bright] Backfilled ${new Date(chunkStart*1000).toLocaleDateString()} - ${new Date(chunkEnd*1000).toLocaleDateString()}: ${readings.length} readings`);
+      } catch {}
+      // Small delay between chunks
+      await new Promise(r => setTimeout(r, 500));
     }
 
-    return { readings: readings.length, exportReadings: exportReadings.length, sample: readings[0], rows };
+    return { readings: totalReadings, exportReadings: 0, sample: allRows[0], rows: allRows };
   } catch (e) {
     return { error: e.message };
   }
