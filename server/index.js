@@ -403,7 +403,9 @@ app.post('/api/ecoflow/login', authMiddleware, async (req, res) => {
       email: creds.email,
       updated_at: Math.floor(Date.now() / 1000),
     });
-    // Restart MQTT with new creds
+    // Store credentials for auto-refresh
+    db.setSetting('ecoflow_email', email);
+    db.setSetting('ecoflow_password', password);
     restartMqtt();
     res.json({ success: true, userId: creds.userId });
   } catch (e) {
@@ -415,7 +417,8 @@ app.get('/api/ecoflow/status', authMiddleware, (req, res) => {
   const config = db.getMqttConfig();
   res.json({
     configured: !!config,
-    email: config?.email,
+    email: config?.email || db.getSetting('ecoflow_email'),
+    hasStoredPassword: !!(db.getSetting('ecoflow_password')),
     connected: mqttClient.connected,
     stats: mqttClient.getStats(),
   });
@@ -1419,6 +1422,9 @@ mqttClient.on('state', (state) => {
 });
 
 // ── MQTT restart helper ─────────────────────────────────────
+let mqttFailCount = 0;
+let mqttLastFailTime = 0;
+
 function restartMqtt() {
   const config = db.getMqttConfig();
   const devices = db.getDevices();
@@ -1428,6 +1434,30 @@ function restartMqtt() {
   }
   mqttClient.disconnect();
   mqttClient.connect(config, devices);
+}
+
+// Auto-refresh MQTT credentials when connection keeps failing
+async function autoRefreshCredentials() {
+  const email = db.getSetting('ecoflow_email');
+  const password = db.getSetting('ecoflow_password');
+  if (!email || !password) return false;
+  try {
+    console.log('[MQTT] Auto-refreshing credentials...');
+    const creds = await ecoflowLogin(email, password);
+    db.saveMqttConfig({
+      host: creds.mqttHost, port: creds.mqttPort,
+      username: creds.mqttUsername, password: creds.mqttPassword,
+      user_id: creds.userId, email: creds.email,
+      updated_at: Math.floor(Date.now()/1000),
+    });
+    console.log('[MQTT] Credentials refreshed, reconnecting...');
+    mqttFailCount = 0;
+    restartMqtt();
+    return true;
+  } catch (e) {
+    console.error('[MQTT] Credential refresh failed:', e.message);
+    return false;
+  }
 }
 
 // ── Data logger ─────────────────────────────────────────────
@@ -1566,12 +1596,36 @@ setInterval(() => trackDailyAccuracy().catch(()=>{}), 2 * 3600 * 1000);
 setTimeout(() => trackDailyAccuracy().catch(()=>{}), 60000);
 
 // ── MQTT watchdog ───────────────────────────────────────────
-setInterval(() => {
+setInterval(async () => {
   if (mqttClient.connected && mqttClient.lastDataTime) {
     const idle = (Date.now() / 1000) - mqttClient.lastDataTime;
     if (idle > 45) {
       console.log(`[MQTT] No data for ${Math.round(idle)}s — reconnecting`);
-      restartMqtt();
+      mqttFailCount++;
+      mqttLastFailTime = Date.now();
+      // After 3 failed reconnects + 60s of no data, refresh credentials
+      if (mqttFailCount >= 3 && idle > 60) {
+        console.log('[MQTT] Multiple failures — refreshing credentials...');
+        const refreshed = await autoRefreshCredentials();
+        if (!refreshed) restartMqtt();
+      } else {
+        restartMqtt();
+      }
+    }
+  } else if (!mqttClient.connected) {
+    // Track disconnected time for credential refresh
+    if (!mqttLastFailTime) mqttLastFailTime = Date.now();
+    const disconnectedSec = (Date.now() - mqttLastFailTime) / 1000;
+    if (disconnectedSec > 90 && mqttFailCount < 3) {
+      mqttFailCount = 3;
+      console.log('[MQTT] Disconnected for 90s — refreshing credentials...');
+      await autoRefreshCredentials();
+    }
+  } else {
+    // Connected and receiving data — reset fail count
+    if (mqttFailCount > 0 && mqttClient.lastDataTime && (Date.now()/1000 - mqttClient.lastDataTime) < 10) {
+      mqttFailCount = 0;
+      mqttLastFailTime = 0;
     }
   }
 }, 5000);
