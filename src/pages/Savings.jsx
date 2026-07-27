@@ -83,10 +83,13 @@ export default function Savings() {
 
       {savings&&!savings.error&&<>
         <div className="grid-4" style={{margin:'16px 0'}}>
-          <div className="stat-card"><div className="label">Total Saved (avoided grid)</div><div className="value" style={{color:'var(--accent)'}}>£{savings.totalSaving||savings.selfConsumptionSaving||savings.netSaving}</div></div>
-          <div className="stat-card"><div className="label">Solar Produced</div><div className="value">{savings.totalPvKwh||0}<span className="unit">kWh</span></div></div>
-          <div className="stat-card"><div className="label">Electricity Rate</div><div className="value" style={{fontSize:22}}>£{savings.rate||0}<span className="unit">/kWh</span></div></div>
-          <div className="stat-card"><div className="label">Avg Daily Saving</div><div className="value">£{((savings.totalSaving||0)/(savings.deviceCount||1)/Math.max(1,(dailyData.length||7))).toFixed(2)}</div></div>
+          <div className="stat-card"><div className="label">Total Saved</div><div className="value" style={{color:'var(--accent)'}}>£{savings.totalSaving}</div>
+            <div className="sub">{savings.hasGridMeter?'Based on grid meter data':'Based on solar production'}</div></div>
+          <div className="stat-card"><div className="label">Solar Produced</div><div className="value">{savings.totalPvKwh}<span className="unit">kWh</span></div></div>
+          <div className="stat-card"><div className="label">Grid Import</div><div className="value" style={{color:savings.totalImportKwh>0?'var(--warn)':'var(--text-dim)'}}>{savings.totalImportKwh}<span className="unit">kWh</span></div>
+            <div className="sub">£{savings.importCost}</div></div>
+          <div className="stat-card"><div className="label">Grid Export</div><div className="value" style={{color:'var(--accent2)'}}>{savings.totalExportKwh}<span className="unit">kWh</span></div>
+            <div className="sub">£{savings.exportValue}</div></div>
         </div>
       </>}
 

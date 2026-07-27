@@ -1,6 +1,6 @@
 // Hourly/daily aggregator and savings calculator
 
-import db, { getHistoricalData, saveHourly, getAggregates, getCurrentRate } from './db.js';
+import db, { getHistoricalData, saveHourly, getAggregates, getCurrentRate, getGridData } from './db.js';
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -40,36 +40,71 @@ export function runHourlyRollup(sn) {
   rollupHourly(sn, prevHour);
 }
 
-// Calculate savings: total kWh produced × electricity rate = money saved
-// (Every kWh you generate is one you don't buy from the grid)
+// Calculate savings using real grid meter data when available, falling back to PV-only estimate
 export function calculateSavings(sn, fromTs, toTs) {
   const rate = getCurrentRate();
   if (!rate) return { error: 'No electricity rate configured' };
-  // Get PV1 + PV2 power data
+
+  // Get PV production
   const pvRows = getHistoricalData(sn, fromTs, toTs, [361, 70]);
-  if (!pvRows || pvRows.length === 0) return { error: 'No data for this period' };
   let totalPvKwh = 0, lastTs = null;
   for (const row of pvRows) {
     if (row.value_num == null) continue;
     if (lastTs !== null) {
       const intervalHours = (row.ts - lastTs) / 3600;
-      if (intervalHours > 0 && intervalHours < 1) {
-        totalPvKwh += (row.value_num * intervalHours) / 1000;
-      }
+      if (intervalHours > 0 && intervalHours < 1) totalPvKwh += (row.value_num * intervalHours) / 1000;
     }
     lastTs = row.ts;
   }
-  // Simple: all solar produced = avoided grid purchase
-  const saving = totalPvKwh * rate.price_per_kwh;
+  if (totalPvKwh < 0.0001) return { error: 'No data for this period' };
+
+  // Try to get real grid import data
+  const gridRows = getGridData(fromTs, toTs);
+  let totalImportKwh = 0, totalExportKwh = 0;
+  let hasGridData = gridRows && gridRows.length > 5;
+
+  if (hasGridData) {
+    let lastGridTs = null;
+    for (const row of gridRows) {
+      if (row.power_w == null) continue;
+      if (lastGridTs !== null) {
+        const intervalHours = (row.ts - lastGridTs) / 3600;
+        if (intervalHours > 0 && intervalHours < 1) {
+          if (row.power_w > 5) totalImportKwh += (row.power_w * intervalHours) / 1000;
+          else if (row.power_w < -5) totalExportKwh += (Math.abs(row.power_w) * intervalHours) / 1000;
+        }
+      }
+      lastGridTs = row.ts;
+    }
+  } else {
+    // No grid meter: all solar = avoided import (conservative estimate)
+    // We assume ~30% self-consumption, ~70% export (typical UK microinverter)
+    totalImportKwh = Math.max(0, totalPvKwh * 0.0); // won't show import without meter
+    totalExportKwh = totalPvKwh * 0.0;                 // won't show export without meter
+    totalImportKwh = 0;
+    totalExportKwh = 0;
+  }
+
+  const importCost = totalImportKwh * rate.price_per_kwh;
+  const exportValue = totalExportKwh * rate.price_per_kwh;
+  const selfConsKwh = Math.max(0, totalPvKwh - totalExportKwh);
+  const selfConsumptionSaving = selfConsKwh * rate.price_per_kwh;
+  const totalSaving = hasGridData
+    ? round(selfConsumptionSaving + exportValue - importCost)
+    : round(totalPvKwh * rate.price_per_kwh); // no grid meter: simple PV × rate
+
   return {
     rate: rate.price_per_kwh, currency: rate.currency || 'GBP',
     totalPvKwh: round(totalPvKwh),
-    totalSaving: round(saving),
-    selfConsumptionSaving: round(saving),
-    netSaving: round(saving),
-    totalImportKwh: 0, totalExportKwh: 0, importCost: 0, exportValue: 0,
-    totalSelfConsKwh: round(totalPvKwh),
+    totalImportKwh: round(totalImportKwh),
+    totalExportKwh: round(totalExportKwh),
+    totalSelfConsKwh: round(selfConsKwh),
+    importCost: round(importCost),
+    exportValue: round(exportValue),
+    selfConsumptionSaving: round(selfConsumptionSaving),
+    totalSaving, netSaving: totalSaving,
     sampleCount: pvRows.length,
+    hasGridMeter: hasGridData,
     fromTs, toTs,
   };
 }

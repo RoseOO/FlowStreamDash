@@ -50,8 +50,8 @@ export class GridMeter extends EventEmitter {
       if (Object.keys(results).length === 0) return;
 
       const now = Math.floor(Date.now() / 1000);
-      const power = results.power != null ? -(results.power) : null; // Flip: raw negative=import, we want positive=import
-      const energy = results.total_daily_energy != null ? Math.abs(results.total_daily_energy) : null;
+      const power = results.power ?? null; // Raw value now directly reflects import (positive=import)
+      const energy = results.total_daily_energy ?? null;
       const voltage = results.voltage ?? null;
       const current = results.current ?? null;
 

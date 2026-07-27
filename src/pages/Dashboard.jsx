@@ -105,7 +105,7 @@ export default function Dashboard() {
         {[{label:'Live Solar',val:livePV,unit:'W',color:'var(--pv2)'},
           {label:'Today',val:todayKwh,unit:'kWh',fmt:2,sub:vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null},
           {label:'Saving',val:totalSaving,color:'var(--accent)',fmt:2,prefix:'£'},
-          gridPower?.w!=null&&{label:'Grid Meter',val:gridPower.w,unit:'W',color:gridPower.w>0?'var(--warn)':'var(--accent)',prefix:gridPower.w>0?'+':''},
+          gridPower?.w!=null&&{label:'Grid Meter',val:Math.abs(gridPower.w),unit:'W',color:gridPower.w>0?'var(--warn)':'var(--accent)',prefix:gridPower.w>0?'Import ':'Export ',sub:`${gridPower.w>0?'Importing':'Exporting'} from grid`},
           {label:'CO₂',val:co2Today,unit:'kg',color:'var(--accent)',fmt:3},
           forecast&&{label:forecast.usingLearnedModel?'☀ AI Forecast':'Forecast',val:forecast.predictedTotalKwh,unit:'kWh',color:'var(--accent2)',sub:forecast.usingLearnedModel?`×${forecast.modelFactor} · ${forecast.modelSamples} samples`:`${forecast.alreadyProducedKwh}kWh done`},
           {label:'Projected/yr',val:annualKwh,unit:'kWh',sub:`£${fmt(annualKwh*rate,0)}·${fmt(rate,2)}/kWh`},
