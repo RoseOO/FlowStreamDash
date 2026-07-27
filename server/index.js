@@ -1360,6 +1360,30 @@ app.get('/api/grid-meter/latest', authMiddleware, (req, res) => {
   const latest = db.getLatestGridReading();
   res.json(latest || { power_w: null, energy_kwh: null });
 });
+app.get('/api/grid-meter/test', authMiddleware, async (req, res) => {
+  const ip = db.getSetting('grid_meter_ip') || '192.168.150.202';
+  const results = {};
+  for (const id of ['power', 'voltage', 'current', 'total_daily_energy']) {
+    try {
+      const r = await fetch(`http://${ip}/sensor/${id}`, { signal: AbortSignal.timeout(3000) });
+      results[id] = { status: r.status, body: await r.text().catch(()=>'parse error') };
+    } catch(e) { results[id] = { error: e.message }; }
+    try {
+      // Also try with full sensor- prefix
+      const r2 = await fetch(`http://${ip}/sensor/sensor-${id}`, { signal: AbortSignal.timeout(2000) });
+      if (r2.ok) {
+        const d = await r2.json().catch(()=>({}));
+        results[`sensor-${id}`] = { status: r2.status, value: d.value, state: d.state };
+      }
+    } catch {}
+    try {
+      // Try root /
+      const r3 = await fetch(`http://${ip}/`, { signal: AbortSignal.timeout(2000) });
+      results['_root'] = { status: r3.status, length: (await r3.text()).length };
+    } catch {}
+  }
+  res.json({ ip, results, lastData: gridMeter.lastData });
+});
 app.get('/api/grid-meter/history', authMiddleware, (req, res) => {
   const { from, to } = req.query;
   const fromTs = from ? parseInt(from) : Math.floor(Date.now()/1000-86400);
