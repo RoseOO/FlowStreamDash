@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function DevApiConfig({ apiFetch }) {
   const [accessKey, setAccessKey] = useState('');
@@ -7,10 +7,13 @@ export default function DevApiConfig({ apiFetch }) {
   const [saved, setSaved] = useState('');
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
+  const timerRef = useRef(null);
 
   useEffect(() => {
     apiFetch('/devapi/status').then(d => setConfigured(d.configured)).catch(()=>{});
-  }, []);
+  }, [apiFetch]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   async function save(e) {
     e.preventDefault(); setError(''); setSaved('');
@@ -25,7 +28,7 @@ export default function DevApiConfig({ apiFetch }) {
       } else {
         setSaved('Credentials verified ✓');
       }
-      setTimeout(() => setSaved(''), 5000);
+      timerRef.current = setTimeout(() => setSaved(''), 5000);
     } catch(err) { setError(err.message); }
   }
 
@@ -37,7 +40,7 @@ export default function DevApiConfig({ apiFetch }) {
       } else {
         setSaved('All API devices already registered.');
       }
-      setTimeout(() => setSaved(''), 3000);
+      timerRef.current = setTimeout(() => setSaved(''), 3000);
     } catch(err) { setError(err.message); }
   }
 

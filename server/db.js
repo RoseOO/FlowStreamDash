@@ -123,11 +123,11 @@ db.exec(`
 `);
 
 // Migrate: add total_val to hourly if missing (can happen on older DBs)
-try { db.exec('ALTER TABLE hourly ADD COLUMN total_val REAL'); } catch (e) { /* already exists */ }
-try { db.exec('ALTER TABLE daily ADD COLUMN total_val REAL'); } catch (e) { /* already exists */ }
-try { db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch (e) { /* already exists */ }
-try { db.exec('ALTER TABLE grid_meter_data ADD COLUMN voltage_v REAL'); } catch (e) { /* already exists */ }
-try { db.exec('ALTER TABLE grid_meter_data ADD COLUMN current_a REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE hourly ADD COLUMN total_val REAL'); } catch (e) { if (!e.message?.includes('duplicate column name')) console.error('Migration error (hourly total_val):', e.message); }
+try { db.exec('ALTER TABLE daily ADD COLUMN total_val REAL'); } catch (e) { if (!e.message?.includes('duplicate column name')) console.error('Migration error (daily total_val):', e.message); }
+try { db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch (e) { if (!e.message?.includes('duplicate column name')) console.error('Migration error (users is_admin):', e.message); }
+try { db.exec('ALTER TABLE grid_meter_data ADD COLUMN voltage_v REAL'); } catch (e) { if (!e.message?.includes('duplicate column name')) console.error('Migration error (grid_meter_data voltage_v):', e.message); }
+try { db.exec('ALTER TABLE grid_meter_data ADD COLUMN current_a REAL'); } catch (e) { if (!e.message?.includes('duplicate column name')) console.error('Migration error (grid_meter_data current_a):', e.message); }
 
 export function getSetting(key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -313,9 +313,9 @@ export function getDataRange(sn) {
 }
 
 // Hourly / Daily aggregates
-export function saveHourly(sn, hourTs, fieldNum, avg, min, max, count) {
-  db.prepare(`INSERT OR REPLACE INTO hourly (device_sn, hour_ts, field_num, avg_val, min_val, max_val, count_val)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`).run(sn, hourTs, fieldNum, avg, min, max, count);
+export function saveHourly(sn, hourTs, fieldNum, avg, min, max, count, totalVal) {
+  db.prepare(`INSERT OR REPLACE INTO hourly (device_sn, hour_ts, field_num, avg_val, min_val, max_val, total_val, count_val)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(sn, hourTs, fieldNum, avg, min, max, totalVal, count);
 }
 
 export function getAggregates(sn, fromTs, toTs, fieldNums, table = 'hourly') {

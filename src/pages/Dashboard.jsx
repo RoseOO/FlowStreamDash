@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [snapshots, setSnapshots] = useState({});
   const navigate = useNavigate();
 
-  useEffect(() => { apiFetch('/devices').then(setDevices).finally(() => setLoading(false)); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices).finally(() => setLoading(false)); }, [apiFetch]);
 
   // Fetch latest snapshot for all devices (cold-start data)
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function Dashboard() {
       devices.forEach((d, i) => { map[d.sn] = { ...(results[i]?.latest || {}), _idle: results[i]?.idle || false }; });
       setSnapshots(map);
     });
-  }, [devices.length]);
+  }, [devices.length, apiFetch]);
 
   function getDeviceData(sn) {
     return { ...(snapshots[sn] || {}), ...(liveData[sn] || {}) };
@@ -45,12 +45,12 @@ export default function Dashboard() {
     const now = Math.floor(Date.now()/1000);
     const todayStart = Math.floor(now/DAY)*DAY;
     Promise.all([
-      apiFetch(`/stats/${devices[0].sn}/enhanced?from=${todayStart}&to=${now}`),
-      apiFetch(`/savings/calculate/${devices[0].sn}?from=${todayStart}&to=${now}`),
-      apiFetch(`/stats/${devices[0].sn}/monthly`),
-      apiFetch(`/settings/panels/${devices[0].sn}`),
-      apiFetch('/weather'),
-      apiFetch(`/forecast/${devices[0].sn}`),
+      apiFetch(`/stats/${devices[0].sn}/enhanced?from=${todayStart}&to=${now}`).catch(() => null),
+      apiFetch(`/savings/calculate/${devices[0].sn}?from=${todayStart}&to=${now}`).catch(() => null),
+      apiFetch(`/stats/${devices[0].sn}/monthly`).catch(() => null),
+      apiFetch(`/settings/panels/${devices[0].sn}`).catch(() => null),
+      apiFetch('/weather').catch(() => null),
+      apiFetch(`/forecast/${devices[0].sn}`).catch(() => null),
     ]).then(([enhanced, todaySave, monthlyData, panels, weatherData, forecastData]) => {
       setStats(enhanced); setSavings(todaySave); setMonthly(monthlyData||[]);
       setPanelConfig(panels); setWeather(weatherData); setForecast(forecastData);
@@ -75,7 +75,7 @@ export default function Dashboard() {
         })));
       }
     }).catch(()=>{});
-  }, [devices]);
+  }, [devices, apiFetch]);
 
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
   if (devices.length === 0) return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function BrightConfig({ apiFetch }) {
   const [username, setUsername] = useState('');
@@ -7,17 +7,20 @@ export default function BrightConfig({ apiFetch }) {
   const [saved, setSaved] = useState('');
   const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState('');
+  const timerRef = useRef(null);
 
   useEffect(() => {
     apiFetch('/bright/status').then(d => { setConfigured(d.configured); setUsername(d.username||''); }).catch(()=>{});
-  }, []);
+  }, [apiFetch]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   async function save(e) {
     e.preventDefault(); setError(''); setSaved('');
     try {
       await apiFetch('/bright/configure', { method:'POST', body:JSON.stringify({ username, password }) });
       setConfigured(true); setSaved('Credentials verified ✓'); setPassword('');
-      setTimeout(() => setSaved(''), 3000);
+      timerRef.current = setTimeout(() => setSaved(''), 3000);
     } catch(err) { setError(err.message); }
   }
 
@@ -26,7 +29,7 @@ export default function BrightConfig({ apiFetch }) {
     try {
       const r = await apiFetch('/bright/backfill', { method:'POST', body:JSON.stringify({}) });
       setSaved(`Backfilled ${r.readings} days of historical meter data!`);
-      setTimeout(() => setSaved(''), 5000);
+      timerRef.current = setTimeout(() => setSaved(''), 5000);
     } catch(err) { setError(err.message); }
     setBackfilling(false);
   }

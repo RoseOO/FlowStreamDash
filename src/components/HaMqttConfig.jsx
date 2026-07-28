@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function HaMqttConfig({ apiFetch }) {
   const [enabled, setEnabled] = useState(false);
@@ -10,13 +10,16 @@ export default function HaMqttConfig({ apiFetch }) {
   const [connected, setConnected] = useState(false);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
+  const timerRef = useRef(null);
 
   useEffect(() => {
     apiFetch('/settings/ha-mqtt').then(d => {
       setEnabled(d.enabled); setHost(d.host); setPort(String(d.port));
       setUsername(d.username); setPrefix(d.discovery_prefix); setConnected(d.connected);
     });
-  }, []);
+  }, [apiFetch]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   async function save(e) {
     e.preventDefault(); setError(''); setSaved('');
@@ -26,7 +29,7 @@ export default function HaMqttConfig({ apiFetch }) {
       });
       setConnected(result.connected);
       setSaved(result.connected ? 'Connected! ✓' : 'Saved');
-      setTimeout(() => setSaved(''), 3000);
+      timerRef.current = setTimeout(() => setSaved(''), 3000);
     } catch(err) { setError(err.message); }
   }
 

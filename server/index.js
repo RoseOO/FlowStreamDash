@@ -379,7 +379,7 @@ app.get('/api/public/weather', apiKeyAuth, async (req, res) => {
   const lat = db.getSetting('weather_lat') || DEFAULT_LAT;
   const lon = db.getSetting('weather_lon') || DEFAULT_LON;
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloud_cover,shortwave_radiation&timezone=auto&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&hourly=cloud_cover,shortwave_radiation&timezone=auto&forecast_days=1`;
     const resp = await fetch(url); const data = await resp.json();
     const hours = data.hourly?.time?.map((t,i) => ({
       time: t, hour: new Date(t).getHours(),
@@ -517,6 +517,13 @@ app.post('/api/bright/backfill', authMiddleware, async (req, res) => {
 
 // ── Dev API quota poller (every 60s, GET quota/all) ────────
 let quotaTimer = null;
+let rollupTimer = null;
+let autoTrainTimer = null;
+let accuracyTimer = null;
+let haStatsTimer = null;
+let haPredTimer = null;
+let watchdogTimer = null;
+let idleTimer = null;
 async function pollQuotaData() {
   const devices = db.getDevices();
   for (const d of devices) {
@@ -683,7 +690,26 @@ app.get('/api/savings/aggregate', authMiddleware, (req, res) => {
   });
 });
 
+app.post('/api/savings/night-rate', authMiddleware, (req, res) => {
+  const { price_per_kwh, start_hour, end_hour } = req.body;
+  if (price_per_kwh) db.setSetting('night_rate', String(price_per_kwh));
+  if (start_hour != null) db.setSetting('night_start', String(start_hour));
+  if (end_hour != null) db.setSetting('night_end', String(end_hour));
+  res.json({ success: true });
+});
+
+app.get('/api/savings/night-rate', authMiddleware, (req, res) => {
+  res.json({
+    enabled: db.getSetting('night_rate') ? true : false,
+    price_per_kwh: parseFloat(db.getSetting('night_rate') || '0'),
+    start_hour: parseInt(db.getSetting('night_start') || '23'),
+    end_hour: parseInt(db.getSetting('night_end') || '6'),
+  });
+});
+
 function round2(v) { return Math.round(v * 100) / 100; }
+
+function round3(v) { return v != null && !isNaN(v) ? Math.round(v * 1000) / 1000 : ''; }
 
 function computeHourlyProfile(pvRows, fromTs, toTs) {
   // For each day, compute average power per hour, then average across days
@@ -920,7 +946,7 @@ app.get('/api/stats/:sn/pr', authMiddleware, async (req, res) => {
   try {
     for (let dayTs = Math.floor(fromTs/86400)*86400; dayTs < toTs; dayTs += 86400) {
       const date = new Date(dayTs*1000).toISOString().slice(0,10);
-      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
+      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
       const resp = await fetch(url); const data = await resp.json();
       if (data.hourly) {
         const dailyRadiation = data.hourly.shortwave_radiation.reduce((a,b)=>a+(b||0),0);
@@ -1117,7 +1143,7 @@ app.get('/api/stats/:sn/monthly', authMiddleware, (req, res) => {
 app.get('/api/weather', authMiddleware, (req, res) => {
   const lat = req.query.lat || db.getSetting('weather_lat') || DEFAULT_LAT;
   const lon = req.query.lon || db.getSetting('weather_lon') || DEFAULT_LON;
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloud_cover,shortwave_radiation&timezone=auto&forecast_days=1`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&hourly=cloud_cover,shortwave_radiation&timezone=auto&forecast_days=1`;
   fetch(url).then(r=>r.json()).then(data => {
     const now = new Date();
     const hours = data.hourly?.time?.map((t,i) => ({
@@ -1142,7 +1168,7 @@ app.get('/api/forecast/:sn', authMiddleware, async (req, res) => {
   const lon = db.getSetting('weather_lon') || DEFAULT_LON;
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=shortwave_radiation,cloud_cover&timezone=auto&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&hourly=shortwave_radiation,cloud_cover&timezone=auto&forecast_days=1`;
     const resp = await fetch(url);
     const data = await resp.json();
     const radMap = {}, cloudMap = {};
@@ -1211,7 +1237,7 @@ app.post('/api/model/:sn/train', authMiddleware, async (req, res) => {
 
       // Fetch historical radiation for this day
       const date = new Date(dayStart * 1000).toISOString().slice(0,10);
-      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
+      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
       const resp = await fetch(url);
       const data = await resp.json();
       if (!data.hourly) continue;
@@ -1824,7 +1850,7 @@ mqttClient.on('data', ({ sn, fields }) => {
 });
 
 // ── Hourly rollup scheduler ────────────────────────────────
-setInterval(() => {
+rollupTimer = setInterval(() => {
   const devices = db.getDevices();
   for (const d of devices) {
     try { runHourlyRollup(d.sn); } catch (e) { /* skip */ }
@@ -1857,7 +1883,7 @@ async function autoTrain() {
           if (existing?.c > 0) continue;
 
           const date = new Date(dayStart * 1000).toISOString().slice(0,10);
-          const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
+          const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
           try {
             const resp = await fetch(url);
             const data = await resp.json();
@@ -1865,23 +1891,6 @@ async function autoTrain() {
             const radByHour = {};
             data.hourly.time.forEach((t, i) => {
               radByHour[new Date(t).getHours()] = data.hourly.shortwave_radiation[i] || 0;
-});
-
-app.post('/api/savings/night-rate', authMiddleware, (req, res) => {
-  const { price_per_kwh, start_hour, end_hour } = req.body;
-  if (price_per_kwh) db.setSetting('night_rate', String(price_per_kwh));
-  if (start_hour != null) db.setSetting('night_start', String(start_hour));
-  if (end_hour != null) db.setSetting('night_end', String(end_hour));
-  res.json({ success: true });
-});
-
-app.get('/api/savings/night-rate', authMiddleware, (req, res) => {
-  res.json({
-    enabled: db.getSetting('night_rate') ? true : false,
-    price_per_kwh: parseFloat(db.getSetting('night_rate') || '0'),
-    start_hour: parseInt(db.getSetting('night_start') || '23'),
-    end_hour: parseInt(db.getSetting('night_end') || '6'),
-  });
 });
             for (let h = 0; h < 24; h++) {
               const hourTs = dayStart + h * 3600;
@@ -1904,7 +1913,7 @@ app.get('/api/savings/night-rate', authMiddleware, (req, res) => {
   }
 }
 setTimeout(() => autoTrain().catch(()=>{}), 30000); // run 30s after startup
-setInterval(() => autoTrain().catch(()=>{}), 6 * 3600 * 1000);
+autoTrainTimer = setInterval(() => autoTrain().catch(()=>{}), 6 * 3600 * 1000);
 
 // Track daily prediction vs actual accuracy
 async function trackDailyAccuracy() {
@@ -1931,7 +1940,7 @@ async function trackDailyAccuracy() {
       const lat = db.getSetting('weather_lat') || DEFAULT_LAT;
       const lon = db.getSetting('weather_lon') || DEFAULT_LON;
       const date = new Date(yesterdayStart*1000).toISOString().slice(0,10);
-      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
+      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&start_date=${date}&end_date=${date}&hourly=shortwave_radiation&timezone=auto`;
       const resp = await fetch(url); const data = await resp.json();
       if (!data.hourly) continue;
       let predictedKwh = 0;
@@ -1940,7 +1949,7 @@ async function trackDailyAccuracy() {
     } catch (e) { /* skip */ }
   }
 }
-setInterval(() => trackDailyAccuracy().catch(()=>{}), 2 * 3600 * 1000);
+accuracyTimer = setInterval(() => trackDailyAccuracy().catch(()=>{}), 2 * 3600 * 1000);
 setTimeout(() => trackDailyAccuracy().catch(()=>{}), 60000);
 
 // ── Periodic HA stats publish ──────────────────────────────
@@ -1978,7 +1987,7 @@ async function publishPeriodicHaStats() {
     }
   } catch (e) { /* skip */ }
 }
-setInterval(() => publishPeriodicHaStats().catch(()=>{}), 5 * 60 * 1000);
+haStatsTimer = setInterval(() => publishPeriodicHaStats().catch(()=>{}), 5 * 60 * 1000);
 setTimeout(() => publishPeriodicHaStats().catch(()=>{}), 30000);
 
 // ── Periodic HA prediction publish ─────────────────────────
@@ -1993,7 +2002,7 @@ async function publishPeriodicHaPrediction() {
     const factor = model?.avg_factor || 0.42;
     const lat = db.getSetting('weather_lat') || DEFAULT_LAT;
     const lon = db.getSetting('weather_lon') || DEFAULT_LON;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=shortwave_radiation&timezone=auto&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&hourly=shortwave_radiation&timezone=auto&forecast_days=1`;
     const resp = await fetch(url);
     const data = await resp.json();
     if (!data.hourly) return;
@@ -2028,11 +2037,11 @@ async function publishPeriodicHaPrediction() {
     });
   } catch (e) { /* skip */ }
 }
-setInterval(() => publishPeriodicHaPrediction().catch(()=>{}), 15 * 60 * 1000);
+haPredTimer = setInterval(() => publishPeriodicHaPrediction().catch(()=>{}), 15 * 60 * 1000);
 setTimeout(() => publishPeriodicHaPrediction().catch(()=>{}), 60000);
 
 // ── MQTT watchdog ───────────────────────────────────────────
-setInterval(async () => {
+watchdogTimer = setInterval(async () => {
   if (mqttClient.connected && mqttClient.lastDataTime) {
     const idle = (Date.now() / 1000) - mqttClient.lastDataTime;
     if (idle > 45) {
@@ -2067,8 +2076,9 @@ setInterval(async () => {
 const POWER_FIELDS = [361, 70, 616]; // PV1, PV2, Grid
 const IDLE_TIMEOUT = 120;
 const idleSent = {}; // track last time we sent idle zeros per device
+const alertCooldown = {}; // sn -> last alert timestamp
 
-setInterval(() => {
+idleTimer = setInterval(() => {
   const now = Date.now() / 1000;
   const devices = db.getDevices();
   for (const d of devices) {
@@ -2088,7 +2098,6 @@ setInterval(() => {
       }
       // Alert only if device was generating recently (within last 6 hours) and suddenly stopped
       // Don't alert at night or if already alerted recently
-      const alertCooldown = {}; // sn -> last alert timestamp
       const hour = new Date().getHours();
       const wasGenerating = deviceLastPower[sn] && (now - deviceLastPower[sn]) < 21600; // 6 hours
       const lastAlert = alertCooldown[sn] || 0;
@@ -2187,5 +2196,26 @@ app.use((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[Server] EcoFlow Monitor running on http://localhost:${PORT}`);
-  console.log(`[Server] JWT secret: ${JWT_SECRET.substring(0, 8)}...`);
+  console.log(`[Server] JWT secret configured`);
 });
+
+// ── Graceful shutdown ────────────────────────────────────────
+function shutdown() {
+  console.log('[Server] Shutting down gracefully...');
+  if (quotaTimer) clearInterval(quotaTimer);
+  if (rollupTimer) clearInterval(rollupTimer);
+  if (autoTrainTimer) clearInterval(autoTrainTimer);
+  if (accuracyTimer) clearInterval(accuracyTimer);
+  if (haStatsTimer) clearInterval(haStatsTimer);
+  if (haPredTimer) clearInterval(haPredTimer);
+  if (watchdogTimer) clearInterval(watchdogTimer);
+  if (idleTimer) clearInterval(idleTimer);
+  try { mqttClient.disconnect(); } catch {}
+  if (devMqttClient) { try { devMqttClient.end(true); } catch {} }
+  try { gridMeter.stop(); } catch {}
+  try { stopHaMqtt(); } catch {}
+  server.close(() => { console.log('[Server] Shutdown complete'); process.exit(0); });
+  setTimeout(() => process.exit(1), 10000);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

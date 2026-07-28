@@ -23,12 +23,14 @@ cd "$APP_DIR"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+LOCAL_REPO=false
 if [[ -d "$APP_DIR/.git" ]]; then
     cd "$APP_DIR"
 elif [[ -d "$REPO_ROOT/.git" ]]; then
     # Running from inside the repo — update in place
     log "Updating from local repo: $REPO_ROOT"
     cd "$REPO_ROOT"
+    LOCAL_REPO=true
 else
     err "App not installed. Run install.sh first."
 fi
@@ -37,7 +39,6 @@ fi
 log "Pulling latest code..."
 # Reset generated files that conflict with clean repo state
 git checkout -- package-lock.json 2>/dev/null || true
-git stash push -- package-lock.json 2>/dev/null || true
 export GIT_TERMINAL_PROMPT=0
 git fetch origin
 CURRENT=$(git rev-parse HEAD)
@@ -60,6 +61,12 @@ npx vite build
 
 log "Removing dev dependencies..."
 npm prune --omit=dev
+
+# ── Copy to app directory (when updating from local repo) ─────────
+if $LOCAL_REPO; then
+    log "Copying updated code to $APP_DIR ..."
+    rsync -a --delete --exclude node_modules --exclude data --exclude .git "$REPO_ROOT/" "$APP_DIR/"
+fi
 
 # ── Restart service ────────────────────────────────────────────────
 log "Restarting service..."

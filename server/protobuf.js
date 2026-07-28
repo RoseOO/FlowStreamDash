@@ -78,6 +78,7 @@ export function decodeMqttPayload(rawBuffer) {
         pos = np;
       } else if (wireType === 2) { // length-delimited
         const { value: len, nextPos: np1 } = readVarint(pdata, pos);
+        if (len > 65536) break;
         const bytes = pdata.slice(np1, np1 + len);
         // Try UTF-8 string first; if fails, interpret as sub-message
         try {

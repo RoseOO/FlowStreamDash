@@ -30,7 +30,7 @@ export default function DeviceDetail() {
     apiFetch(`/settings/panels/${sn}`).then(setPanelConfig);
     // Fetch latest snapshot so we show data immediately on page load
     apiFetch(`/data/${sn}/latest`).then(r => setSnapshot({ ...(r.latest || {}), _idle: r.idle || false }));
-  }, [sn]);
+  }, [sn, apiFetch]);
 
   const BASE_FIELDS = [361, 70, 616, 613, 371];
   const allGraphFields = [...new Set([...BASE_FIELDS, ...customGraphFields])];
@@ -63,8 +63,8 @@ export default function DeviceDetail() {
         }
         setHistory(sorted);
       })
-      .catch(err => console.error('[DeviceDetail] History fetch failed:', err));
-  }, [sn, customGraphFields.join(','), graphRange, customFrom, customTo]);
+      .catch(() => {});
+  }, [sn, customGraphFields.join(','), graphRange, customFrom, customTo, apiFetch]);
 
   // Merge live data (only for 1h/6h ranges where live updates matter)
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function DeviceDetail() {
     setFlashFields(newSet);
     const timer = setTimeout(() => setFlashFields(new Set()), 600);
     return () => clearTimeout(timer);
-  }, [ld]);
+  }, [ld[361], ld[380], ld[381], ld[70], ld[442], ld[71], ld[616], ld[613], ld[371], ld[602], allGraphFields, pv1Rated, pv2Rated]);
 
   function fmt(v,d=0){return v!=null?v.toFixed(d):'--';}
 

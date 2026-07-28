@@ -6,7 +6,7 @@ export default function ApiKeyManager({ apiFetch }) {
   const [createdKey, setCreatedKey] = useState(null);
   const [error, setError] = useState('');
 
-  useEffect(() => { loadKeys(); }, []);
+  useEffect(() => { loadKeys(); }, [apiFetch]);
 
   async function loadKeys() {
     try { setKeys(await apiFetch('/auth/apikeys')); } catch {}

@@ -18,9 +18,9 @@ export default function History() {
   const [selectedFields, setSelectedFields] = useState([361, 70, 616]);
   const [gridData, setGridData] = useState([]);
 
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
   useEffect(() => { if (devices.length>0 && !selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
-  useEffect(() => { if (selectedSn) apiFetch(`/settings/panels/${selectedSn}`).then(setPanelConfig); }, [selectedSn]);
+  useEffect(() => { if (selectedSn) apiFetch(`/settings/panels/${selectedSn}`).then(setPanelConfig); }, [selectedSn, apiFetch]);
 
   // Fetch grid meter data separately
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function History() {
     apiFetch(`/grid-meter/history?from=${from}&to=${to}`)
       .then(rows => setGridData(rows || []))
       .catch(() => setGridData([]));
-  }, [selectedSn, range, customFrom, customTo]);
+  }, [selectedSn, range, customFrom, customTo, apiFetch]);
 
   useEffect(() => {
     if (!selectedSn) return;
@@ -54,9 +54,9 @@ export default function History() {
       to = now;
     }
     apiFetch(`/data/${selectedSn}/history?from=${from}&to=${to}&fields=${selectedFields.join(',')}`)
-      .then(rows => setRawData(rows))
+      .then(rows => setRawData(rows || []))
       .finally(() => setLoading(false));
-  }, [selectedSn, range, selectedFields.join(','), customFrom, customTo]);
+  }, [selectedSn, range, selectedFields.join(','), customFrom, customTo, apiFetch]);
 
   // Client-side downsample: group into ~200 buckets
   const chartData = useMemo(() => {
@@ -80,7 +80,7 @@ export default function History() {
       for (const fk of Object.keys(b._sum)) pt[fk] = Math.round(b._sum[fk] / b._cnt[fk] * 10) / 10;
       return pt;
     });
-  }, [rawData, panelConfig]);
+  }, [rawData]);
 
   // Efficiency fields (computed): 901=Pv1Eff, 902=Pv2Eff
   const chartDataWithEff = useMemo(() => {
@@ -129,7 +129,6 @@ export default function History() {
     { f:802, label:'Grid Voltage (V)' },
     { f:803, label:'Grid Current (A)' },
   ];
-  const allFieldOpts = [...fieldOptions, ...effFields.map(e=>e.f), ...gridFields.map(e=>e.f)];
   const colors = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548','#FFC107','#607D8B','#E91E63','#FF5722'];
 
   return (

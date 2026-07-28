@@ -47,7 +47,7 @@ export default function GridDetail() {
       })));
       setStats(s);
     });
-  }, [range, customFrom, customTo]);
+  }, [range, customFrom, customTo, apiFetch]);
 
   // Append live data for short ranges
   useEffect(() => {

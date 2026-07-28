@@ -74,7 +74,7 @@ export default function App() {
       .then(r => r.json())
       .then(d => { if (d.valid) setIsAdmin(d.is_admin); setLoading(false); })
       .catch(() => { logout(); setLoading(false); });
-  }, []);
+  }, [token, logout]);
 
   // WebSocket for live data
   useEffect(() => {

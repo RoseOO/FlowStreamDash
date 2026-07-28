@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function PanelConfig({ apiFetch, sn }) {
   const [pv1, setPv1] = useState('');
   const [pv2, setPv2] = useState('');
   const [saved, setSaved] = useState('');
+  const timerRef = useRef(null);
 
   useEffect(() => {
     apiFetch(`/settings/panels/${sn}`).then(d => {
       setPv1((d.pv1_rated_watts||0).toString());
       setPv2((d.pv2_rated_watts||0).toString());
     });
-  }, [sn]);
+  }, [sn, apiFetch]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   async function save(e) {
     e.preventDefault();
@@ -19,7 +22,7 @@ export default function PanelConfig({ apiFetch, sn }) {
       body:JSON.stringify({ pv1_rated_watts: parseInt(pv1)||0, pv2_rated_watts: parseInt(pv2)||0 }),
     });
     setSaved('Saved!');
-    setTimeout(() => setSaved(''), 2000);
+    timerRef.current = setTimeout(() => setSaved(''), 2000);
   }
 
   return (

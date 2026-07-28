@@ -27,7 +27,7 @@ function buildSignStr(params, accessKey, nonce, timestamp) {
   const parts = [];
   if (params) {
     const flat = flattenParams(params);
-    for (const k of Object.keys(flat).sort()) parts.push(`${k}=${flat[k]}`);
+    for (const k of Object.keys(flat).sort()) parts.push(`${k}=${encodeURIComponent(flat[k])}`);
   }
   parts.push(`accessKey=${accessKey}`);
   parts.push(`nonce=${nonce}`);

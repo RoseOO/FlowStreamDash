@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 const DAY = 86400;
 
@@ -19,13 +19,13 @@ export default function Savings() {
   const [dailyData, setDailyData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
-  useEffect(() => { apiFetch('/savings/rate').then(r => { setCurrentRate(r); if(r)setRate(r.price_per_kwh.toString()); }); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
+  useEffect(() => { apiFetch('/savings/rate').then(r => { setCurrentRate(r); if(r)setRate(r.price_per_kwh.toString()); }); }, [apiFetch]);
   useEffect(() => {
     apiFetch('/savings/night-rate').then(r => {
       if (r.enabled) { setNightEnabled(true); setNightRateVal(r.price_per_kwh.toString()); setNightStart(String(r.start_hour)); setNightEnd(String(r.end_hour)); }
     });
-  }, []);
+  }, [apiFetch]);
 
   useEffect(() => {
     if (!rate) return;
@@ -48,7 +48,7 @@ export default function Savings() {
         date: typeof d.date === 'string' ? d.date : new Date(d.date * 1000).toLocaleDateString().slice(0,5),
       })));
     }).finally(()=>setLoading(false));
-  }, [selectedSn, rate, range]);
+  }, [selectedSn, rate, range, apiFetch]);
 
   async function saveRate(e) {
     e.preventDefault();

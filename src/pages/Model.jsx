@@ -10,7 +10,7 @@ export default function Model() {
   const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
   useEffect(() => { if (devices.length>0&&!selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
   async function trainModel() {
@@ -34,7 +34,7 @@ export default function Model() {
       apiFetch(`/forecast/${selectedSn}`),
     ]).then(([m,f]) => { setModel(m); setForecast(f); })
     .finally(() => setLoading(false));
-  }, [selectedSn]);
+  }, [selectedSn, apiFetch]);
 
   function fmt(v,d=2){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
 

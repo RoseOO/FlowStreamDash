@@ -11,13 +11,13 @@ export default function Export() {
   const [info, setInfo] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
   useEffect(() => { if (devices.length > 0 && !selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
   useEffect(() => {
     if (!selectedSn) return;
     apiFetch(`/data/${selectedSn}/latest`).then(d => setInfo(d));
-  }, [selectedSn]);
+  }, [selectedSn, apiFetch]);
 
   async function download() {
     setDownloading(true);

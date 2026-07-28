@@ -18,6 +18,7 @@ export class EcoFlowMqttClient extends EventEmitter {
   }
 
   connect(config, devices) {
+    if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
     this.config = config;
     this.devices = devices;
 
@@ -70,6 +71,8 @@ export class EcoFlowMqttClient extends EventEmitter {
       console.log('[MQTT] Disconnected');
       this.connected = false;
       this.emit('state', { connected: false });
+      if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = setTimeout(() => this.connect(this.config, this.devices), 5000);
     });
   }
 
@@ -89,6 +92,7 @@ export class EcoFlowMqttClient extends EventEmitter {
   }
 
   disconnect() {
+    if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
     if (this.client) {
       try { this.client.end(true); } catch (e) { /* ignore */ }
       this.client = null;

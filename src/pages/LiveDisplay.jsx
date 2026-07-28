@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -39,7 +39,7 @@ export default function LiveDisplay() {
 
   const DAY = 86400;
 
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
 
   useEffect(() => {
     if (devices.length === 0) return;
@@ -58,7 +58,7 @@ export default function LiveDisplay() {
         })));
       }
     });
-  }, [devices]);
+  }, [devices, apiFetch]);
 
   let livePV = 0;
   for (const d of devices) { const ld = liveData[d.sn] || {}; livePV += (ld[361]||0)+(ld[70]||0); }

@@ -107,7 +107,7 @@ export function formatValue(fnum, value) {
           if (code > 0) codes.push(getErrorLabel(code));
         }
         return codes.length > 0 ? codes.join(', ') : 'None';
-      } catch { return value; }
+      } catch { console.error('[fields] Hex parse error for field 627:', value); return value; }
     }
     return String(value) === '0' ? 'None' : String(value);
   }

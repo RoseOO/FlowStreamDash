@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, LineChart, Line, Legend, ComposedChart, Brush } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Line, Legend, ComposedChart, Brush } from 'recharts';
 
 const DAY = 86400;
 
@@ -17,7 +17,7 @@ export default function Stats() {
   const [gridStats, setGridStats] = useState(null);
   const [tab, setTab] = useState('profile');
 
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, []);
+  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
   useEffect(() => { if (devices.length>0&&!selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function Stats() {
       apiFetch(`/grid-meter/stats?from=${from}&to=${now}`).catch(()=>{}),
     ]).then(([s,p,q,d,g])=>{setStats(s);setPr(p||null);setQuality(q||null);setDegradation(d||null);setGridStats(g||null);})
     .finally(()=>setLoading(false));
-  }, [selectedSn, range]);
+  }, [selectedSn, range, apiFetch]);
 
   if (loading&&!stats) return <div className="loading"><div className="spinner"></div></div>;
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function GridMeterConfig({ apiFetch }) {
   const [enabled, setEnabled] = useState(false);
@@ -7,13 +7,16 @@ export default function GridMeterConfig({ apiFetch }) {
   const [lastPower, setLastPower] = useState(null);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
+  const timerRef = useRef(null);
 
   useEffect(() => {
     apiFetch('/settings/grid-meter').then(d => {
       setEnabled(d.enabled); setIp(d.ip);
       setConnected(d.connected); setLastPower(d.lastPower);
     });
-  }, []);
+  }, [apiFetch]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   async function save(e) {
     e.preventDefault(); setError(''); setSaved('');
@@ -22,7 +25,7 @@ export default function GridMeterConfig({ apiFetch }) {
         method:'POST', body:JSON.stringify({ enabled, ip }),
       });
       setSaved('Saved');
-      setTimeout(() => setSaved(''), 3000);
+      timerRef.current = setTimeout(() => setSaved(''), 3000);
     } catch(err) { setError(err.message); }
   }
 

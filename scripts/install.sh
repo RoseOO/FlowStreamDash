@@ -26,6 +26,7 @@ err()  { echo -e "${RED}[ERR]${NC} $1"; exit 1; }
 if ! command -v node &>/dev/null; then
     err "Node.js is not installed. Install Node.js >= ${NODE_MIN_VERSION} first."
 fi
+NODE_PATH=$(command -v node)
 NODE_MAJOR=$(node -v | sed 's/v//' | cut -d. -f1)
 [[ $NODE_MAJOR -ge $NODE_MIN_VERSION ]] || err "Node.js >= ${NODE_MIN_VERSION} required (found v$(node -v))"
 
@@ -78,11 +79,12 @@ chown -R ecoflow:ecoflow "$DATA_DIR" 2>/dev/null || {
 chown -R ecoflow:ecoflow "$APP_DIR"
 
 # ── Symlink data directory ─────────────────────────────────────────
+rm -rf "$APP_DIR/data" 2>/dev/null || true
 ln -sf "$DATA_DIR" "$APP_DIR/data"
 
 # ── Install systemd service ────────────────────────────────────────
 log "Installing systemd service..."
-cat > /etc/systemd/system/${SERVICE_NAME}.service << 'SERVICEEOF'
+cat > /etc/systemd/system/${SERVICE_NAME}.service << SERVICEEOF
 [Unit]
 Description=EcoFlow Monitor
 After=network-online.target
@@ -95,7 +97,7 @@ Group=ecoflow
 WorkingDirectory=/opt/ecoflow-monitor
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=/usr/bin/node server/index.js
+ExecStart=$NODE_PATH server/index.js
 Restart=always
 RestartSec=10
 StandardOutput=journal

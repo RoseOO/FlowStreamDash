@@ -29,7 +29,7 @@ export function rollupHourly(sn, hourTs) {
     const avg = sum / vals.length;
     const min = Math.min(...vals);
     const max = Math.max(...vals);
-    saveHourly(sn, hourTs, parseInt(fieldNum), avg, min, max, vals.length);
+    saveHourly(sn, hourTs, parseInt(fieldNum), avg, min, max, vals.length, sum);
   }
 }
 
@@ -66,7 +66,7 @@ export function calculateSavings(sn, fromTs, toTs) {
 
   // Try to get real grid import data
   const gridRows = getGridData(fromTs, toTs);
-  let totalImportKwh = 0, totalExportKwh = 0;
+  let totalImportKwh = 0, totalExportKwh = 0, totalImportCost = 0, totalExportValue = 0;
   let hasGridData = gridRows && gridRows.length > 5;
 
   if (hasGridData) {
@@ -81,8 +81,15 @@ export function calculateSavings(sn, fromTs, toTs) {
             ? (h >= nightStart || h < nightEnd)  // e.g. 23-6
             : (h >= nightStart && h < nightEnd);
           const effectiveRate = (hasNightRate && isNight) ? nightRateVal : dayRate;
-          if (row.power_w > 5) totalImportKwh += (row.power_w * intervalHours) / 1000;
-          else if (row.power_w < -5) totalExportKwh += (Math.abs(row.power_w) * intervalHours) / 1000;
+          if (row.power_w > 5) {
+            const kwh = (row.power_w * intervalHours) / 1000;
+            totalImportKwh += kwh;
+            totalImportCost += kwh * effectiveRate;
+          } else if (row.power_w < -5) {
+            const kwh = (Math.abs(row.power_w) * intervalHours) / 1000;
+            totalExportKwh += kwh;
+            totalExportValue += kwh * effectiveRate;
+          }
         }
       }
       lastGridTs = row.ts;
@@ -96,8 +103,8 @@ export function calculateSavings(sn, fromTs, toTs) {
     totalExportKwh = 0;
   }
 
-  const importCost = totalImportKwh * rate.price_per_kwh;
-  const exportValue = totalExportKwh * rate.price_per_kwh;
+  const importCost = totalImportCost;
+  const exportValue = totalExportValue;
   const selfConsKwh = Math.max(0, totalPvKwh - totalExportKwh);
   const selfConsumptionSaving = selfConsKwh * rate.price_per_kwh;
   // Total saving = what solar saved you (always positive)

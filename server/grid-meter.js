@@ -11,6 +11,9 @@ export class GridMeter extends EventEmitter {
     this.controller = null;
     this.lastData = null;
     this.running = false;
+    this._knownSensors = new Set();
+    this._lastEmitTime = 0;
+    this._emitTimer = null;
   }
 
   configure(cfg) {
@@ -28,6 +31,7 @@ export class GridMeter extends EventEmitter {
 
   stop() {
     this.running = false;
+    if (this._emitTimer) { clearTimeout(this._emitTimer); this._emitTimer = null; }
     if (this.controller) { this.controller.abort(); this.controller = null; }
   }
 
@@ -73,11 +77,20 @@ export class GridMeter extends EventEmitter {
           } catch {}
         }
 
-        // Emit batch every ~500ms
-        if (Object.keys(results).length >= 4) {
-          const now = Math.floor(Date.now() / 1000);
+        // Emit: either all known sensors reported, or 3s since last emit
+        const now = Date.now();
+        this._knownSensors.add('power');
+        this._knownSensors.add('total_daily_energy');
+        this._knownSensors.add('voltage');
+        this._knownSensors.add('current');
+        const allReported = [...this._knownSensors].every(k => k in results);
+        const timeToEmit = (now - this._lastEmitTime) >= 3000;
+        if (allReported || (timeToEmit && Object.keys(results).length > 0)) {
+          this._lastEmitTime = now;
+          if (this._emitTimer) { clearTimeout(this._emitTimer); this._emitTimer = null; }
+          const ts = Math.floor(now / 1000);
           this.lastData = {
-            ts: now,
+            ts,
             power_w: results.power ?? null,
             energy_kwh: results.total_daily_energy ?? null,
             voltage_v: results.voltage ?? null,
@@ -86,6 +99,22 @@ export class GridMeter extends EventEmitter {
           this.emit('data', this.lastData);
           // Clear for next batch
           for (const k of Object.keys(results)) delete results[k];
+        } else if (!this._emitTimer && Object.keys(results).length > 0) {
+          this._emitTimer = setTimeout(() => {
+            if (!results.power && !results.total_daily_energy && !results.voltage && !results.current) return;
+            const ts = Math.floor(Date.now() / 1000);
+            this._lastEmitTime = Date.now();
+            this.lastData = {
+              ts,
+              power_w: results.power ?? null,
+              energy_kwh: results.total_daily_energy ?? null,
+              voltage_v: results.voltage ?? null,
+              current_a: results.current ?? null,
+            };
+            this.emit('data', this.lastData);
+            for (const k of Object.keys(results)) delete results[k];
+            this._emitTimer = null;
+          }, 3000);
         }
       }
     } catch (e) {
