@@ -36,7 +36,7 @@ export default function App() {
   const [theme, setTheme] = useState(localStorage.getItem('ecoflow_theme') || 'dark');
   const [alerts, setAlerts] = useState([]);
   const [gridPower, setGridPower] = useState(null);
-  const location = useLocation();
+  const routerLoc = useLocation();
   const wsRef = useRef(null);
 
   // Theme toggle
@@ -166,7 +166,7 @@ export default function App() {
       <AdminContext.Provider value={isAdmin}>
       <LiveContext.Provider value={{ connected, liveData, gridPower }}>
         <div className="app-layout">
-          {location.pathname !== '/live' && <nav className="navbar">
+          {routerLoc.pathname !== '/live' && <nav className="navbar">
             <span className="logo">⚡ EcoFlow</span>
             <span className={`status-dot ${connected ? 'on' : 'off'}`} title={connected ? 'Connected' : 'Disconnected'}></span>
             {alerts.length > 0 && <button className="theme-btn" title={`${alerts.length} alerts`} onClick={() => setAlerts([])}
@@ -189,7 +189,7 @@ export default function App() {
             </button>
           </nav>}
 
-          {location.pathname !== '/live' && menuOpen && (
+          {routerLoc.pathname !== '/live' && menuOpen && (
             <div className={`mobile-menu ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
               <div className="menu-section">Navigation</div>
               <NavLink to="/">Dashboard</NavLink>
