@@ -9,6 +9,7 @@ import Stats from './pages/Stats';
 import ApiDocs from './pages/ApiDocs';
 import Model from './pages/Model';
 import GridDetail from './pages/GridDetail';
+import LiveDisplay from './pages/LiveDisplay';
 import Setup from './pages/Setup';
 
 // ── Auth Context ────────────────────────────────────────────
@@ -215,6 +216,7 @@ export default function App() {
               <Route path="/apidocs" element={<ApiDocs />} />
               <Route path="/model" element={<Model />} />
               <Route path="/grid" element={<GridDetail />} />
+              <Route path="/live" element={<LiveDisplay />} />
               <Route path="/setup" element={<Setup />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
