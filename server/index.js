@@ -11,7 +11,7 @@ import { ecoflowLogin } from './auth.js';
 import * as db from './db.js';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, getCsvLabel, formatValue, KNOWN_FIELDS, GRAPH_FIELDS } from './fields.js';
 import { runHourlyRollup, calculateSavings, calculateDailySavings } from './aggregator.js';
-import { startHaMqtt, stopHaMqtt, publishState, isHaMqttConnected } from './ha-mqtt.js';
+import { startHaMqtt, stopHaMqtt, publishState, publishHaGridMeter, publishHaStats, publishHaPrediction, isHaMqttConnected } from './ha-mqtt.js';
 import { GridMeter } from './grid-meter.js';
 import { getDevMqttCert, verifyCredentials, listDevices, fetchAllQuota } from './dev-api.js';
 import { verifyBrightCredentials, backfillGridData } from './bright-api.js';
@@ -1142,7 +1142,7 @@ app.get('/api/forecast/:sn', authMiddleware, async (req, res) => {
       predictedRemainingKwh += predW / 1000;
     }
 
-    res.json({
+    const result = {
       currentHour,
       remainingHours: 23 - currentHour,
       modelFactor: round2(factor),
@@ -1154,9 +1154,9 @@ app.get('/api/forecast/:sn', authMiddleware, async (req, res) => {
       predictedRemainingKwh: round2(predictedRemainingKwh),
       alreadyProducedKwh: stats.totalKwh || 0,
       predictedTotalKwh: round2((stats.totalKwh||0) + predictedRemainingKwh),
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    };
+    publishHaPrediction(req.params.sn, result);
+    res.json(result);
   }
 });
 
@@ -1381,6 +1381,8 @@ gridMeter.on('data', (data) => {
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(msg);
   }
+  // Home Assistant MQTT
+  publishHaGridMeter(data);
 });
 
 app.get('/api/settings/grid-meter', authMiddleware, (req, res) => {
@@ -1914,6 +1916,94 @@ async function trackDailyAccuracy() {
 }
 setInterval(() => trackDailyAccuracy().catch(()=>{}), 2 * 3600 * 1000);
 setTimeout(() => trackDailyAccuracy().catch(()=>{}), 60000);
+
+// ── Periodic HA stats publish ──────────────────────────────
+async function publishPeriodicHaStats() {
+  try {
+    const devices = db.getDevices();
+    if (devices.length === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    const todayStart = Math.floor(now / 86400) * 86400;
+    const yesterdayStart = todayStart - 86400;
+    for (const d of devices) {
+      const stats = getStats(d.sn, todayStart, now);
+      if (!stats || stats.totalKwh <= 0) continue;
+      const pv1W = parseInt(db.getDeviceConfig(d.sn, 'pv1_rated_watts') || '0');
+      const pv2W = parseInt(db.getDeviceConfig(d.sn, 'pv2_rated_watts') || '0');
+      const totalRated = pv1W + pv2W;
+      const eff1 = stats.efficiency?.pv1?.pct || 0;
+      const eff2 = stats.efficiency?.pv2?.pct || 0;
+      const pvEff = totalRated > 0 ? (eff1 * pv1W + eff2 * pv2W) / totalRated : null;
+      const model = db.getModelStats(d.sn);
+      const rate = parseFloat(db.getSetting('electricity_rate') || '0');
+      const yesterday = getStats(d.sn, yesterdayStart, todayStart);
+      const co2Kg = stats.totalKwh * 0.233; // UK grid carbon intensity kg/kWh
+      publishHaStats(d.sn, {
+        totalKwh: stats.totalKwh,
+        bestDay: stats.bestDay,
+        pvEfficiency: pvEff,
+        totalSaving: round2(stats.totalKwh * rate),
+        co2SavingKgToday: round3(co2Kg),
+        yesterday: { totalKwh: yesterday?.totalKwh || 0 },
+        modelFactor: model?.avg_factor,
+        modelSamples: model?.samples,
+        modelR2: model?.r_squared,
+      });
+    }
+  } catch (e) { /* skip */ }
+}
+setInterval(() => publishPeriodicHaStats().catch(()=>{}), 5 * 60 * 1000);
+setTimeout(() => publishPeriodicHaStats().catch(()=>{}), 30000);
+
+// ── Periodic HA prediction publish ─────────────────────────
+async function publishPeriodicHaPrediction() {
+  try {
+    const devices = db.getDevices();
+    if (devices.length === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    const todayStart = Math.floor(now / 86400) * 86400;
+    const currentHour = new Date().getHours();
+    const model = db.getModelStats(devices[0].sn);
+    const factor = model?.avg_factor || 0.42;
+    const lat = db.getSetting('weather_lat') || DEFAULT_LAT;
+    const lon = db.getSetting('weather_lon') || DEFAULT_LON;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=shortwave_radiation&timezone=auto&forecast_days=1`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!data.hourly) return;
+    let predictedRemainingKwh = 0;
+    const hourlyPred = {};
+    for (let h = currentHour + 1; h <= 23; h++) {
+      const rad = data.hourly.shortwave_radiation?.[h] || 0;
+      const predW = rad * factor;
+      hourlyPred[h] = round2(predW);
+      predictedRemainingKwh += predW / 1000;
+    }
+    const stats = getStats(devices[0].sn, todayStart, now);
+    const yesterdayStart = todayStart - 86400;
+    const yesterdayEnd = todayStart;
+    let yesterdayErrorPct = null;
+    try {
+      const accStats = db.getAccuracyStats(devices[0].sn, 1);
+      if (accStats && accStats.avg_abs_error != null) {
+        yesterdayErrorPct = accStats.avg_abs_error;
+      }
+    } catch {}
+    publishHaPrediction(devices[0].sn, {
+      predictedTotalKwh: round2((stats.totalKwh || 0) + predictedRemainingKwh),
+      predictedRemainingKwh: round2(predictedRemainingKwh),
+      alreadyProducedKwh: stats.totalKwh || 0,
+      modelFactor: round2(factor),
+      modelSamples: model?.samples || 0,
+      usingLearnedModel: (model?.samples || 0) > 10,
+      predictedWattsByHour: hourlyPred,
+      currentHour,
+      yesterdayErrorPct,
+    });
+  } catch (e) { /* skip */ }
+}
+setInterval(() => publishPeriodicHaPrediction().catch(()=>{}), 15 * 60 * 1000);
+setTimeout(() => publishPeriodicHaPrediction().catch(()=>{}), 60000);
 
 // ── MQTT watchdog ───────────────────────────────────────────
 setInterval(async () => {

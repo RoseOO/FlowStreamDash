@@ -178,7 +178,7 @@ export default function Dashboard() {
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
         {[{label:'Live Solar',val:livePV,unit:'W',color:'var(--pv2)'},
           {label:'Today',val:todayKwh,unit:'kWh',fmt:2,sub:vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null},
-          {label:'Saving',val:totalSaving,color:'var(--accent)',fmt:2,prefix:'£'},
+          {label:'Saving',val:totalSaving,color:'var(--accent)',fmt:2,prefix:'£',sub:`${Math.round(totalSaving*100)}p · ${fmt(todayKwh,2)}kWh`},
           gridPower?.w!=null&&{label:'Grid Meter',val:Math.abs(gridPower.w),unit:'W',color:gridPower.w>0?'var(--warn)':'var(--accent)',prefix:gridPower.w>0?'Import ':'Export ',sub:`${gridPower.w>0?'Importing':'Exporting'} from grid`},
           gridStats?.importCost!=null&&{label:'Import Cost Today',val:gridStats.importCost,color:'var(--warn)',fmt:2,prefix:'£'},
           {label:'CO₂',val:co2Today,unit:'kg',color:'var(--accent)',fmt:3},

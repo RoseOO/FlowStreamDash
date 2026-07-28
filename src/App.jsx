@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Routes, Route, Navigate, NavLink } from 'react-router-dom';
+import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import DeviceDetail from './pages/DeviceDetail';
 import History from './pages/History';
@@ -36,6 +36,7 @@ export default function App() {
   const [theme, setTheme] = useState(localStorage.getItem('ecoflow_theme') || 'dark');
   const [alerts, setAlerts] = useState([]);
   const [gridPower, setGridPower] = useState(null);
+  const location = useLocation();
   const wsRef = useRef(null);
 
   // Theme toggle
@@ -165,7 +166,7 @@ export default function App() {
       <AdminContext.Provider value={isAdmin}>
       <LiveContext.Provider value={{ connected, liveData, gridPower }}>
         <div className="app-layout">
-          <nav className="navbar">
+          {location.pathname !== '/live' && <nav className="navbar">
             <span className="logo">⚡ EcoFlow</span>
             <span className={`status-dot ${connected ? 'on' : 'off'}`} title={connected ? 'Connected' : 'Disconnected'}></span>
             {alerts.length > 0 && <button className="theme-btn" title={`${alerts.length} alerts`} onClick={() => setAlerts([])}
@@ -186,9 +187,9 @@ export default function App() {
             <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>
               {menuOpen ? '✕' : '☰'}
             </button>
-          </nav>
+          </nav>}
 
-          {menuOpen && (
+          {location.pathname !== '/live' && menuOpen && (
             <div className={`mobile-menu ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
               <div className="menu-section">Navigation</div>
               <NavLink to="/">Dashboard</NavLink>

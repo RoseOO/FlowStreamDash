@@ -150,3 +150,106 @@ code { background: var(--bg-card2); padding: 1px 5px; border-radius: 3px; font-s
 .align-right { text-align: right; }
 .flex-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .gap-sm { gap: 6px; }
+
+/* ── Live Display (kiosk) ─────────────────────────── */
+.live-display {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 12px 16px;
+  font-family: system-ui;
+  overflow-x: hidden;
+}
+.live-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  opacity: 0.55;
+}
+.live-top-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.live-conn-label { font-size: 11px; color: var(--text-dim); }
+.live-main { max-width: 860px; margin: 0 auto; }
+
+/* ── Flow diagram ──────────────────────────────────── */
+.live-flow-card {
+  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 12px;
+  margin-bottom: 12px;
+}
+.live-flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+.live-box {
+  text-align: center;
+  flex-shrink: 0;
+}
+.live-box-icon { font-size: 40px; line-height: 1.2; }
+.live-box-val {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+}
+.live-box-unit { font-size: 18px; font-weight: 400; color: var(--text-dim); }
+.live-box-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; white-space: nowrap; }
+.live-box-home {
+  background: rgba(33,150,243,.08);
+  border-radius: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+}
+
+/* animated arrow glow */
+@keyframes flow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.flow-arrow-glow { animation: flow-pulse 1.8s ease-in-out infinite; }
+
+/* ── Stats row ──────────────────────────────────────── */
+.live-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.live-stat-item {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.live-stat-label { font-size: 11px; color: var(--text-dim); }
+.live-stat-val { font-size: 24px; font-weight: 700; margin-top: 2px; }
+.live-stat-val-solo { font-size: 20px; font-weight: 700; margin-top: 2px; }
+.live-stat-unit { font-size: 13px; font-weight: 400; color: var(--text-dim); margin-left: 1px; }
+
+/* ── Chart ──────────────────────────────────────────── */
+.live-chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.live-chart-wrap { width: 100%; height: 300px; }
+
+/* ── Small screen tweaks ────────────────────────────── */
+@media (max-width: 500px) {
+  .live-box-val { font-size: 28px; }
+  .live-stat-val { font-size: 18px; }
+  .live-stat-val-solo { font-size: 16px; }
+}
+

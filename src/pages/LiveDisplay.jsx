@@ -1,7 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const BOX_W = 160;
+
+function FlowArrow({ from, to, active, activeDir, power, color }) {
+  return (
+    <div style={{width:50,height:60,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+      <svg width={50} height={60}>
+        {/* base line */}
+        <line x1={0} y1={30} x2={50} y2={30} stroke="var(--border)" strokeWidth={2}/>
+        {/* active arrow */}
+        {active && (
+          <line x1={activeDir==='fwd'?5:45} y1={30} x2={activeDir==='fwd'?45:5} y2={30}
+            stroke={color} strokeWidth={4} strokeLinecap="round"
+            className="flow-arrow-glow"/>
+        )}
+        {/* arrowhead */}
+        {active && (
+          <polygon
+            points={activeDir==='fwd'?'45,22 50,30 45,38':'5,22 0,30 5,38'}
+            fill={color}/>
+        )}
+      </svg>
+    </div>
+  );
+}
 
 export default function LiveDisplay() {
   const { apiFetch } = useAuth();
@@ -49,58 +74,69 @@ export default function LiveDisplay() {
   const pvEff = (pv1Rated+pv2Rated)>0 ? livePV/(pv1Rated+pv2Rated)*100 : null;
   const todayKwh = stats?.today?.totalKwh||0;
   const todaySave = todayKwh * (stats?.rate || 0);
+  const isGenerating = livePV > 5;
   const isImporting = gridW > 5;
+  const isExporting = gridW < -5;
+  const loadW = Math.max(livePV + (isImporting ? gridW : 0), 0);
 
   function fmt(v,d=1){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
+  function fmtPence(amount) {
+    const pence = Math.round(amount * 100);
+    return `£${(pence/100).toFixed(2)}`;
+  }
 
   return (
-    <div style={{minHeight:'100vh',background:'var(--bg)',padding:'16px 20px',fontFamily:'system-ui'}}>
+    <div className="live-display">
       {/* Subtle top bar */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,opacity:0.5}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <span style={{fontSize:14,fontWeight:600,color:'var(--text-dim)'}}>⚡ EcoFlow Live</span>
+      <div className="live-top-bar">
+        <div className="live-top-left">
+          <span>⚡ EcoFlow Live</span>
           <span className={`status-dot ${connected?'on':'off'}`}></span>
-          <span style={{fontSize:12,color:'var(--text-dim)'}}>{connected?'Live':'Offline'}</span>
+          <span className="live-conn-label">{connected?'Live':'Offline'}</span>
         </div>
         <button className="btn btn-sm" style={{background:'var(--bg-card2)',color:'var(--text-dim)'}}
           onClick={()=>navigate('/')}>Exit Display</button>
       </div>
 
-      {/* Main content — centered and large */}
-      <div style={{maxWidth:900,margin:'0 auto'}}>
-        {/* Power Flow — BIG */}
-        <div style={{background:'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card2) 100%)',border:'1px solid var(--border)',borderRadius:16,padding:'24px 30px',marginBottom:16}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:20,flexWrap:'wrap'}}>
+      <div className="live-main">
+        {/* Power Flow */}
+        <div className="live-flow-card">
+          <div className="live-flow-row">
             {/* Solar */}
-            <div style={{textAlign:'center',minWidth:130}}>
-              <div style={{fontSize:48}}>☀</div>
-              <div style={{fontSize:42,fontWeight:700,color:'var(--pv2)',lineHeight:1}}>{livePV.toFixed(0)}<span style={{fontSize:20,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
-              <div style={{fontSize:15,color:'var(--text-dim)',marginTop:4}}>
-                {livePV>5 ? <>Solar · {fmt(pvV,0)}V · {fmt(pvA,1)}A{pvEff!=null?<> · {fmt(pvEff,1)}%</>:''}</> : 'Idle'}
+            <div className="live-box" style={{width:BOX_W}}>
+              <div className="live-box-icon">☀</div>
+              <div className="live-box-val" style={{color:isGenerating?'var(--pv2)':'var(--text-dim)'}}>
+                {fmt(livePV,0)}<span className="live-box-unit">W</span>
+              </div>
+              <div className="live-box-sub">
+                {isGenerating ? <>{fmt(pvV,0)}V · {fmt(pvA,1)}A{pvEff!=null?<> · {fmt(pvEff,1)}%</>:''}</> : 'Idle'}
               </div>
             </div>
 
-            {/* Flow arrows */}
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-              <div style={{fontSize:28,color:livePV>5?'var(--pv2)':'var(--text-dim)',lineHeight:1}}>{livePV>5?'⟶':'·'}</div>
-              <div style={{fontSize:28,color:isImporting?'var(--warn)':'var(--accent)',lineHeight:1}}>{isImporting?'⟵':'·'}</div>
+            {/* Arrow Solar→Home */}
+            <FlowArrow active={isGenerating} activeDir="fwd" power={livePV} color="var(--pv2)"/>
+
+            {/* Home/Load */}
+            <div className="live-box live-box-home" style={{width:BOX_W}}>
+              <div className="live-box-icon">🏠</div>
+              <div className="live-box-val" style={{color:'var(--text)'}}>
+                {fmt(loadW,0)}<span className="live-box-unit">W</span>
+              </div>
+              <div className="live-box-sub">Load</div>
             </div>
 
-            {/* Home center */}
-            <div style={{textAlign:'center',minWidth:130,background:'rgba(33,150,243,.08)',borderRadius:16,padding:'14px 20px',border:'1px solid var(--border)'}}>
-              <div style={{fontSize:36}}>🏠</div>
-              <div style={{fontSize:38,fontWeight:700,lineHeight:1}}>{Math.max(livePV,gridW).toFixed(0)}<span style={{fontSize:18,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
-              <div style={{fontSize:13,color:'var(--text-dim)',marginTop:4}}>Load</div>
-            </div>
+            {/* Arrow Grid↔Home */}
+            <FlowArrow active={isImporting||isExporting} activeDir={isImporting?'rev':'fwd'}
+              power={Math.abs(gridW)} color={isImporting?'var(--warn)':'var(--accent)'}/>
 
             {/* Grid */}
-            <div style={{textAlign:'center',minWidth:130}}>
-              <div style={{fontSize:48}}>⚡</div>
-              <div style={{fontSize:42,fontWeight:700,color:isImporting?'var(--warn)':'var(--accent)',lineHeight:1}}>
-                {gridPower?.w!=null?Math.abs(gridPower.w).toFixed(0):'--'}<span style={{fontSize:20,fontWeight:400,color:'var(--text-dim)'}}>W</span>
+            <div className="live-box" style={{width:BOX_W}}>
+              <div className="live-box-icon">⚡</div>
+              <div className="live-box-val" style={{color:isImporting?'var(--warn)':(isExporting?'var(--accent)':'var(--text-dim)')}}>
+                {gridPower?.w!=null?Math.abs(gridPower.w).toFixed(0):'--'}<span className="live-box-unit">W</span>
               </div>
-              <div style={{fontSize:15,color:'var(--text-dim)',marginTop:4}}>
-                {isImporting?'Importing':(gridPower?.w!=null?'Exporting':'Grid')}
+              <div className="live-box-sub">
+                {isImporting?'Importing':(isExporting?'Exporting':'Grid')}
                 {gridV!=null&&<span> · {fmt(gridV,0)}V</span>}
                 {gridA!=null&&<span> · {fmt(gridA,1)}A</span>}
               </div>
@@ -108,25 +144,30 @@ export default function LiveDisplay() {
           </div>
         </div>
 
-        {/* Stats row */}
-        <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
-          {[{l:'Today kWh',v:todayKwh,f:2,c:'var(--pv2)'},
-            {l:'Saved Today',v:todaySave,c:'var(--accent)',prefix:'£'},
+        {/* Stats row — fixed widths */}
+        <div className="live-stats">
+          {[
+            {l:'Today kWh',v:todayKwh,f:2,c:'var(--pv2)'},
+            {l:`Saved ${fmtPence(todaySave)}`,v:null,c:'var(--accent)'},
             {l:'Peak Today',v:stats?.today?.bestDay?.peakW||stats?.week?.daily?.slice(-1)[0]?.peakW,c:'var(--accent2)',unit:'W'},
             {l:'PV Efficiency',v:pvEff,c:'var(--accent2)',unit:'%',f:1},
             {l:'Grid Voltage',v:gridV,c:'var(--text)',unit:'V',f:0},
           ].map(s=>(
-            <div key={s.l} className="stat-card" style={{flex:'1',minWidth:100,textAlign:'center',padding:'16px 12px'}}>
-              <div className="label">{s.l}</div>
-              <div className="value" style={{fontSize:26,color:s.c}}>{s.prefix||''}{s.f!=null?fmt(s.v,s.f):fmt(s.v,0)}<span className="unit">{s.unit}</span></div>
+            <div key={s.l} className="live-stat-item">
+              <div className="live-stat-label">{s.l}</div>
+              {s.v!==null ? (
+                <div className="live-stat-val" style={{color:s.c}}>{s.f!=null?fmt(s.v,s.f):fmt(s.v,0)}<span className="live-stat-unit">{s.unit}</span></div>
+              ) : (
+                <div className="live-stat-val-solo" style={{color:s.c}}>{s.l.replace('Saved ','')}</div>
+              )}
             </div>
           ))}
         </div>
 
-        {/* Graph — full width, big */}
-        <div className="card" style={{padding:20,marginBottom:16}}>
-          <h3 style={{fontSize:16,marginBottom:12}}>Today's Generation</h3>
-          <div style={{width:'100%',height:320}}>
+        {/* Graph */}
+        <div className="live-chart-card">
+          <h3 style={{fontSize:16,marginBottom:12,textAlign:'center'}}>Today's Generation</h3>
+          <div className="live-chart-wrap">
             {profile.length>0?<ResponsiveContainer>
               <AreaChart animationDuration={0} data={profile}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                 <XAxis dataKey="hour" tick={{fontSize:12,fill:'var(--text-dim)'}} interval={2}/>
@@ -138,7 +179,6 @@ export default function LiveDisplay() {
           </div>
         </div>
 
-        {/* Generation window & stats */}
         {stats?.today?.daylight?.pv1 && (
           <div style={{textAlign:'center',fontSize:15,color:'var(--text-dim)',padding:'8px 0 20px'}}>
             ☀ Gen window: {stats.today.daylight.pv1.window || '--'} · {stats.today.daylight.pv1.genHours||0}h daylight
