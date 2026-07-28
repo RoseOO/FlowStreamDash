@@ -303,9 +303,14 @@ export function startAll(deps) {
     } else if (!mqttClient.connected) {
       if (!getFailTime()) setFailTime(Date.now());
       const disconnectedSec = (Date.now() - getFailTime()) / 1000;
-      if (disconnectedSec > 90 && getFailCount() < 3) {
-        setFailCount(3);
-        await autoRefreshCredentials();
+      // Try reconnect quickly on startup, then wait longer
+      const retryDelay = getFailCount() < 3 ? 15 : 90;
+      if (disconnectedSec > retryDelay) {
+        setFailCount(Math.min(getFailCount() + 1, 10));
+        if (getFailCount() >= 3) {
+          await autoRefreshCredentials();
+        }
+        restartMqtt();
       }
     } else {
       if (getFailCount() > 0 && mqttClient.lastDataTime && (Date.now()/1000 - mqttClient.lastDataTime) < 10) {
@@ -419,6 +424,9 @@ export function startAll(deps) {
   _setTimeout(() => {
     if (db.getSetting('dev_api_access_key')) startDevMqtt().catch(e => console.error('[DevMQTT] Start failed:', e));
   }, 15000);
+
+  // Start MQTT immediately (don't wait for watchdog)
+  _setTimeout(() => restartMqtt(), 1000);
 
   return { restartMqtt, devMqttClient };
 }

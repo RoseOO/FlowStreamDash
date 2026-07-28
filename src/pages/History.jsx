@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../App';
 import { FIELD_META, DISPLAY_ORDER, getFieldLabel } from '../../server/fields';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Brush } from 'recharts';
-import { DAY, CHART_COLORS } from '../utils/constants';
+import { DAY, RANGE_OPTIONS, CHART_COLORS } from '../utils/constants';
 import { fmt } from '../utils/format';
 import useDevices from '../hooks/useDevices';
 import DeviceSelector from '../components/DeviceSelector';
