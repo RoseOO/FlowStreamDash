@@ -1157,6 +1157,8 @@ app.get('/api/forecast/:sn', authMiddleware, async (req, res) => {
     };
     publishHaPrediction(req.params.sn, result);
     res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
