@@ -25,6 +25,10 @@ export default function DeviceDetail() {
   // Merge: latest DB snapshot (fills cold-start gaps) + live MQTT data
   const ld = { ...snapshot, ...liveData[sn] };
 
+  // Panel ratings (used by effects below, must be declared before them)
+  const pv1Rated = parseInt(panelConfig.pv1_rated_watts) || 0;
+  const pv2Rated = parseInt(panelConfig.pv2_rated_watts) || 0;
+
   useEffect(() => {
     apiFetch('/devices').then(devs => { const d=devs.find(x=>x.sn===sn); if(d)setDevice(d); });
     apiFetch(`/settings/panels/${sn}`).then(setPanelConfig);
@@ -106,8 +110,6 @@ export default function DeviceDetail() {
   }
 
   // Efficiency calc
-  const pv1Rated = parseInt(panelConfig.pv1_rated_watts) || 0;
-  const pv2Rated = parseInt(panelConfig.pv2_rated_watts) || 0;
   const pv1Eff = pv1Rated > 0 && ld[361] > 0 ? (ld[361] / pv1Rated * 100) : null;
   const pv2Eff = pv2Rated > 0 && ld[70] > 0 ? (ld[70] / pv2Rated * 100) : null;
 
