@@ -1076,6 +1076,30 @@ app.get('/api/stats/:sn/enhanced', authMiddleware, (req, res) => {
   });
 });
 
+// Hourly overlay — last N days for week-overlay chart
+app.get('/api/stats/:sn/hourly-overlay', authMiddleware, (req, res) => {
+  const days = Math.min(parseInt(req.query.days) || 7, 30);
+  const now = Math.floor(Date.now()/1000);
+  const todayStart = Math.floor(now/86400)*86400;
+  const profiles = [];
+  for (let d = 0; d < days; d++) {
+    const dayStart = todayStart - d * 86400;
+    const dayEnd = dayStart + 86400;
+    const stats = getStats(req.params.sn, dayStart, Math.min(dayEnd, now));
+    const date = new Date(dayStart*1000);
+    const label = d === 0 ? 'Today' : date.toLocaleDateString('en',{weekday:'short'});
+    profiles.push({
+      dayTs: dayStart,
+      label,
+      date: date.toISOString().slice(0,10),
+      isToday: d === 0,
+      hourly: stats.hourlyProfile,
+      totalKwh: stats.totalKwh,
+    });
+  }
+  res.json(profiles.reverse());
+});
+
 // Monthly aggregates
 app.get('/api/stats/:sn/monthly', authMiddleware, (req, res) => {
   const rows = db.default.prepare(

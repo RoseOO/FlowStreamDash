@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [monthly, setMonthly] = useState([]);
   const [forecast, setForecast] = useState(null);
   const [health, setHealth] = useState(null);
+  const [overlay, setOverlay] = useState(null);
   const [gridStats, setGridStats] = useState(null);
   const [todayProfile, setTodayProfile] = useState([]);
   const [tab, setTab] = useState('today');
@@ -55,13 +56,15 @@ export default function Dashboard() {
       setPanelConfig(panels); setWeather(weatherData); setForecast(forecastData);
       // Also fetch system health
       apiFetch('/system/health').then(setHealth).catch(()=>{});
-      // Fetch grid meter stats + merge hourly into today profile
+        // Fetch grid meter stats + merge hourly into today profile
       apiFetch(`/grid-meter/stats?from=${todayStart}&to=${now}`).then(gs => {
         setGridStats(gs);
         if (gs?.hourly) {
           setTodayProfile(prev => prev.map((p,i) => ({...p, gridImport: gs.hourly[i]?.avgW||0})));
         }
       }).catch(()=>{});
+      // Fetch 7-day hourly overlay
+      apiFetch(`/stats/${devices[0].sn}/hourly-overlay?days=7`).then(setOverlay).catch(()=>{});
       if (enhanced.today?.hourlyProfile) {
         setTodayProfile(Array.from({length:24},(_,h)=>({
           hour:`${h}h`,
@@ -289,7 +292,7 @@ export default function Dashboard() {
 
       {/* ── Tabbed Charts ── */}
       <div className="tabs" style={{borderBottom:'2px solid var(--border)'}}>
-        {[{key:'today',label:'Today vs Yesterday'},{key:'weather',label:'Cloud Cover'},{key:'compare',label:'PV1 vs PV2'},{key:'monthly',label:'Monthly'}].map(t=>(
+        {[{key:'today',label:'Today vs Yesterday'},{key:'overlay',label:'Last 7 Days'},{key:'weather',label:'Cloud Cover'},{key:'compare',label:'PV1 vs PV2'},{key:'monthly',label:'Monthly'}].map(t=>(
           <button key={t.key} className={`tab ${tab===t.key?'active':''}`}
             onClick={()=>setTab(t.key)}
             style={{padding:'10px 18px',fontSize:13,background:'none',border:'none',color:tab===t.key?'var(--accent2)':'var(--text-dim)',borderBottom:tab===t.key?'2px solid var(--accent2)':'2px solid transparent',cursor:'pointer',transition:'all .15s',marginBottom:-2}}>{t.label}</button>
@@ -306,6 +309,38 @@ export default function Dashboard() {
             <Line isAnimationActive={false} connectNulls={true} type="monotone" dataKey="gridImport" stroke="#FF9800" name="Grid Import" dot={false} strokeWidth={1.5}/>
           <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </ComposedChart></ResponsiveContainer>}
+          {tab==='overlay'&&(()=>{
+            if (!overlay || overlay.length < 2) return <p style={{color:'var(--text-dim)',textAlign:'center',paddingTop:100}}>Need more days of data for overlay.</p>;
+            const DAY_COLORS = ['#4CAF50','#2196F3','#FF9800','#9C27B0','#E91E63','#00BCD4','#FFC107'];
+            const chartData = Array.from({length:24},(_,h)=>{
+              const pt = { hour: `${h}h` };
+              for (let d = 0; d < overlay.length; d++) {
+                pt[`d${d}`] = overlay[d].hourly?.[h]?.avg || 0;
+              }
+              return pt;
+            });
+            const lineProps = overlay.filter(p=>p.hourly&&Object.keys(p.hourly).length>0).map((p,i)=>{
+              const color = p.isToday ? '#4CAF50' : DAY_COLORS[(i+1)%DAY_COLORS.length];
+              const opacity = p.isToday ? 1 : 0.4;
+              return { dataKey:`d${i}`, name: p.label, stroke: color, opacity, dot:false, connectNulls:true,
+                strokeWidth: p.isToday ? 3 : 1.5, type: 'monotone' };
+            });
+            return <ResponsiveContainer><ComposedChart animationDuration={0} data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+              <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/>
+              <YAxis tick={{fontSize:10,fill:'var(--text-dim)'}}/>
+              <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
+              <Legend wrapperStyle={{fontSize:10}}/>
+              {lineProps.map(lp => {
+                const isToday = overlay.find((p,i) => `d${i}`===lp.dataKey)?.isToday;
+                return isToday
+                  ? <Area isAnimationActive={false} key={lp.dataKey} connectNulls={true} type="monotone" dataKey={lp.dataKey} stroke={lp.stroke} fill={lp.stroke} fillOpacity={0.15} name={lp.name}/>
+                  : <Line isAnimationActive={false} key={lp.dataKey} connectNulls={true} type="monotone" dataKey={lp.dataKey} stroke={lp.stroke} strokeWidth={lp.strokeWidth||1.5} name={lp.name} dot={false} opacity={lp.opacity||1}/>;
+              })}
+              <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8}
+                tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}}/>
+            </ComposedChart></ResponsiveContainer>;
+          })()}
           {tab==='weather'&&(weather?<ResponsiveContainer><AreaChart animationDuration={0} data={weather.map(w=>({hour:`${w.hour}h`,cloud:w.cloudCover}))}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
             <XAxis dataKey="hour" tick={{fontSize:10,fill:'var(--text-dim)'}} interval={2}/><YAxis tick={{fontSize:10,fill:'var(--text-dim)'}} domain={[0,100]}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/>
