@@ -77,44 +77,74 @@ export default function App() {
   // WebSocket for live data
   useEffect(() => {
     if (!token) return;
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/ws`);
-    wsRef.current = ws;
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'status') setConnected(msg.connected);
-        if (msg.type === 'data' && msg.sn && msg.fields) {
-          setLiveData(prev => {
-            const prevDev = prev[msg.sn] || {};
-            return { ...prev, [msg.sn]: { ...prevDev, ...msg.fields, _ts: msg.ts, _idle: msg.idle || false } };
-          });
-        }
-        if (msg.type === 'devapi' && msg.sn && msg.fields) {
-          // Developer API JSON data with named quota keys
-          setLiveData(prev => {
-            const prevDev = prev[msg.sn] || {};
-            const devFields = {};
-            for (const [key, val] of Object.entries(msg.fields)) {
-              devFields['_dev_' + key] = val;
-            }
-            return { ...prev, [msg.sn]: { ...prevDev, ...devFields, _ts: msg.ts } };
-          });
-        }
-        if (msg.type === 'alert' && msg.message) {
-          // Browser notification
-          if (Notification.permission === 'granted') {
-            new Notification('EcoFlow Alert', { body: msg.message, icon: '/icon.svg' });
+    let ws = null;
+    let reconnectTimer = null;
+    let reconnectDelay = 1000;
+
+    function connect() {
+      if (!token) return;
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectDelay = 1000; // reset on successful connect
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'status') setConnected(msg.connected);
+          if (msg.type === 'data' && msg.sn && msg.fields) {
+            setLiveData(prev => {
+              const prevDev = prev[msg.sn] || {};
+              return { ...prev, [msg.sn]: { ...prevDev, ...msg.fields, _ts: msg.ts, _idle: msg.idle || false } };
+            });
           }
-          setAlerts(prev => [...prev.slice(-4), { ...msg, ts: Date.now() }]);
-        }
-        if (msg.type === 'grid' && msg.power_w != null) {
-          setGridPower({ w: msg.power_w, kwh: msg.energy_kwh, ts: msg.ts, v: msg.voltage_v, a: msg.current_a });
-        }
-      } catch {}
+          if (msg.type === 'devapi' && msg.sn && msg.fields) {
+            setLiveData(prev => {
+              const prevDev = prev[msg.sn] || {};
+              const devFields = {};
+              for (const [key, val] of Object.entries(msg.fields)) {
+                devFields['_dev_' + key] = val;
+              }
+              return { ...prev, [msg.sn]: { ...prevDev, ...devFields, _ts: msg.ts } };
+            });
+          }
+          if (msg.type === 'alert' && msg.message) {
+            if (Notification.permission === 'granted') {
+              new Notification('EcoFlow Alert', { body: msg.message, icon: '/icon.svg' });
+            }
+            setAlerts(prev => [...prev.slice(-4), { ...msg, ts: Date.now() }]);
+          }
+          if (msg.type === 'grid' && msg.power_w != null) {
+            setGridPower({ w: msg.power_w, kwh: msg.energy_kwh, ts: msg.ts, v: msg.voltage_v, a: msg.current_a });
+          }
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        // Auto-reconnect with backoff (1s → 2s → 4s → ... → max 30s)
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => {
+          reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+          connect();
+        }, reconnectDelay);
+      };
+
+      ws.onerror = () => {
+        ws?.close();
+      };
+    }
+
+    connect();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+      setConnected(false);
     };
-    ws.onclose = () => setConnected(false);
-    return () => ws.close();
   }, [token]);
 
   if (loading) return <div className="loading"><div className="spinner"></div><p>Loading...</p></div>;

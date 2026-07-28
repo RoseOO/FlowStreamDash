@@ -118,7 +118,7 @@ export default function Dashboard() {
       <div className="card" style={{marginBottom:12,padding:'14px 16px',background:'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card2) 100%)'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:0,flexWrap:'wrap',minHeight:80}}>
           {/* Solar source */}
-          <div style={{textAlign:'center',minWidth:70}}>
+          <div style={{textAlign:'center',minWidth:110,flexShrink:0}}>
             <div style={{fontSize:28}}>☀</div>
             <div style={{fontSize:20,fontWeight:700,color:'var(--pv2)'}}>{totalPv.toFixed(0)}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
             <div style={{fontSize:10,color:'var(--text-dim)'}}>
@@ -136,7 +136,7 @@ export default function Dashboard() {
           </div>
 
           {/* Center: Home/Load */}
-          <div style={{textAlign:'center',minWidth:80,background:totalDemand>0?'rgba(33,150,243,.1)':'transparent',borderRadius:12,padding:'6px 12px',border:'1px solid var(--border)'}}>
+          <div style={{textAlign:'center',minWidth:100,flexShrink:0,background:totalDemand>0?'rgba(33,150,243,.1)':'transparent',borderRadius:12,padding:'6px 12px',border:'1px solid var(--border)'}}>
             <div style={{fontSize:24}}>🏠</div>
             <div style={{fontSize:22,fontWeight:700}}>{totalDemand>0?totalDemand.toFixed(0):'--'}<span style={{fontSize:13,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
             <div style={{fontSize:10,color:'var(--text-dim)'}}>
@@ -162,7 +162,7 @@ export default function Dashboard() {
           </div>
 
           {/* Grid endpoint */}
-          <div style={{textAlign:'center',minWidth:70}}>
+          <div style={{textAlign:'center',minWidth:110,flexShrink:0}}>
             <div style={{fontSize:28}}>⚡</div>
             <div style={{fontSize:20,fontWeight:700,color:gridImport>5?'var(--warn)':'var(--accent)'}}>
               {gridImport>5?gridImport.toFixed(0):gridPower?.w!=null?'0':'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>W</span>
