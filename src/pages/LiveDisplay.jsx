@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { DAY } from '../utils/constants';
+import { fmt } from '../utils/format';
+import useDevices from '../hooks/useDevices';
 
 const BOX_W = 160;
 
@@ -31,15 +34,11 @@ function FlowArrow({ from, to, active, activeDir, power, color }) {
 export default function LiveDisplay() {
   const { apiFetch } = useAuth();
   const { liveData, connected, gridPower } = useLiveData();
-  const [devices, setDevices] = useState([]);
+  const { devices } = useDevices(apiFetch);
   const [stats, setStats] = useState(null);
   const [profile, setProfile] = useState([]);
   const [panelConfig, setPanelConfig] = useState({});
   const navigate = useNavigate();
-
-  const DAY = 86400;
-
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
 
   useEffect(() => {
     if (devices.length === 0) return;
@@ -79,7 +78,6 @@ export default function LiveDisplay() {
   const isExporting = gridW < -5;
   const loadW = Math.max(livePV + (isImporting ? gridW : 0), 0);
 
-  function fmt(v,d=1){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
   function fmtPence(amount) {
     const pence = Math.round(amount * 100);
     return `£${(pence/100).toFixed(2)}`;

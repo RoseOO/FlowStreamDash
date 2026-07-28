@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend, Brush } from 'recharts';
-
-const DAY = 86400;
+import { DAY } from '../utils/constants';
+import { fmt, tsToDate, minuteToStr } from '../utils/format';
+import StatCard from '../components/StatCard';
 
 export default function Dashboard() {
   const { apiFetch } = useAuth();
@@ -111,10 +112,6 @@ export default function Dashboard() {
   const gridPct = totalDemand > 0 ? Math.round(gridImport / Math.max(1, totalDemand) * 100) : 0;
   const isExporting = gridPower?.w != null && gridImport <= 5;
 
-  function fmt(v,d=1){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
-  function date(t){return t?new Date(t*1000).toLocaleDateString():'';}
-  function minuteToStr(m){if(m==null)return'--';const h=Math.floor(m/60),min=m%60;return`${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;}
-
   return (
     <div>
       {/* ── Live Power Flow Diagram ── */}
@@ -179,115 +176,64 @@ export default function Dashboard() {
       </div>
       {/* ── Hero Banner ── */}
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
-        {[{label:'Live Solar',val:livePV,unit:'W',color:'var(--pv2)'},
-          {label:'Today',val:todayKwh,unit:'kWh',fmt:2,sub:vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null},
-          {label:'Saving',val:totalSaving,color:'var(--accent)',fmt:2,prefix:'£',sub:`${Math.round(totalSaving*100)}p · ${fmt(todayKwh,2)}kWh`},
-          gridPower?.w!=null&&{label:'Grid Meter',val:Math.abs(gridPower.w),unit:'W',color:gridPower.w>0?'var(--warn)':'var(--accent)',prefix:gridPower.w>0?'Import ':'Export ',sub:`${gridPower.w>0?'Importing':'Exporting'} from grid`},
-          gridStats?.importCost!=null&&{label:'Import Cost Today',val:gridStats.importCost,color:'var(--warn)',fmt:2,prefix:'£'},
-          {label:'CO₂',val:co2Today,unit:'kg',color:'var(--accent)',fmt:3},
-          forecast&&{label:forecast.usingLearnedModel?'☀ AI Forecast':'Forecast',val:forecast.predictedTotalKwh,unit:'kWh',color:'var(--accent2)',sub:forecast.usingLearnedModel?`×${forecast.modelFactor} · ${forecast.modelSamples} samples`:`${forecast.alreadyProducedKwh}kWh done`},
-          {label:'Projected/yr',val:annualKwh,unit:'kWh',sub:`£${fmt(annualKwh*rate,0)}·${fmt(rate,2)}/kWh`},
-        ].filter(Boolean).map(s=>(
-          <div key={s.label} className="stat-card" style={{flex:'1 1 80px',minWidth:70,textAlign:'center'}}>
-            <div className="label">{s.label}</div>
-            <div className="value" style={{fontSize:20,color:s.color||'var(--text)'}}>{s.prefix||''}{s.fmt!=null?fmt(s.val,s.fmt):s.val.toFixed(0)}<span style={{fontSize:11,fontWeight:400,color:'var(--text-dim)'}}>{s.unit}</span></div>
-            {s.sub&&<div style={{fontSize:10,color:'var(--text-dim)'}}>{s.sub}</div>}
-          </div>
-        ))}
+        <StatCard label="Live Solar" value={livePV.toFixed(0)} unit="W" color="var(--pv2)" className="flex-stat" />
+        <StatCard label="Today" value={todayKwh.toFixed(2)} unit="kWh" fontSize={20} sub={vsYesterday!=null?`${vsYesterday>=0?'+':''}${fmt(vsYesterday,0)}% vs yest`:null} className="flex-stat" />
+        <StatCard label="Saving" value={`£${fmt(totalSaving,2)}`} color="var(--accent)" fontSize={20} sub={`${Math.round(totalSaving*100)}p · ${fmt(todayKwh,2)}kWh`} className="flex-stat" />
+        {gridPower?.w!=null && <StatCard label="Grid Meter" value={`${gridPower.w>0?'Import ':'Export '}${Math.abs(gridPower.w).toFixed(0)}`} unit="W" color={gridPower.w>0?'var(--warn)':'var(--accent)'} fontSize={20} sub={`${gridPower.w>0?'Importing':'Exporting'} from grid`} className="flex-stat" />}
+        {gridStats?.importCost!=null && <StatCard label="Import Cost Today" value={`£${fmt(gridStats.importCost,2)}`} color="var(--warn)" fontSize={20} className="flex-stat" />}
+        <StatCard label="CO₂" value={fmt(co2Today,3)} unit="kg" color="var(--accent)" fontSize={20} className="flex-stat" />
+        {forecast && <StatCard label={forecast.usingLearnedModel?'☀ AI Forecast':'Forecast'} value={`${forecast.predictedTotalKwh.toFixed(0)}`} unit="kWh" color="var(--accent2)" fontSize={20} sub={forecast.usingLearnedModel?`×${forecast.modelFactor} · ${forecast.modelSamples} samples`:`${forecast.alreadyProducedKwh}kWh done`} className="flex-stat" />}
+        <StatCard label="Projected/yr" value={annualKwh.toFixed(0)} unit="kWh" fontSize={20} sub={`£${fmt(annualKwh*rate,0)}·${fmt(rate,2)}/kWh`} className="flex-stat" />
       </div>
 
       {/* ── PV Performance Cards ── */}
-      {(pv1Rated>0||pv2Rated>0) && (
-        <div className="grid-2" style={{marginBottom:12}}>
-          {pv1Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv1;const ydl=stats?.yesterday?.daylight?.pv1;
-            const hasStarted = dl?.firstMinute != null;
-            const hasStopped = dl?.lastMinute != null;
-            const yestEnd = ydl?.lastMinute;
-            // If generating now: show today start ~ yesterday end (estimated)
-            // If not started: show yesterday's full window as reference
-            // If complete: show today's actual window
-            let genText = dl?.window || '--';
-            let genLabel = 'Gen Window';
-            if (hasStarted && !hasStopped && yestEnd) {
-              genText = `${minuteToStr(dl.firstMinute)}~${minuteToStr(yestEnd)}`;
-              genLabel = 'Gen Window (est)';
-            } else if (!hasStarted && ydl?.window) {
-              genText = `Yesterday: ${ydl.window}`;
-              genLabel = 'Gen Window (yest)';
-            }
-            return(
-            <div className="card" style={{padding:16}}>
-              <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV1 Performance</div>
-              <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
-                <div style={{flex:1,minWidth:70}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Live Power</div>
-                  <div style={{fontSize:26,fontWeight:700,color:'var(--pv1)',lineHeight:1.1}}>{fmt(pv1,0)}<span style={{fontSize:13,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
-                </div>
-                <div style={{flex:1,minWidth:70}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Live Eff</div>
-                  <div style={{fontSize:26,fontWeight:700,color:pv1Eff>70?'var(--accent)':pv1Eff>30?'var(--warn)':'var(--text-dim)',lineHeight:1.1}}>{fmt(pv1Eff,1)}<span style={{fontSize:13,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
-                </div>
-                <div style={{flex:1,minWidth:80}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>D.Light Avg Eff</div>
-                  <div style={{fontSize:22,fontWeight:600,color:dl?.daylightEff>70?'var(--accent)':dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'}}>{dl?.daylightEff!=null?fmt(dl.daylightEff,1):'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
-                </div>
-                <div style={{flex:1,minWidth:90}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>{genLabel}</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{genText}</div>
-                  <div style={{fontSize:10,color:'var(--text-dim)'}}>{dl?.genHours||0} daylight hrs · {pv1Rated}W rated · {fmt(pv1v,1)}V · {fmt(pv1a,2)}A</div>
-                </div>
-              </div>
+      {(pv1Rated>0||pv2Rated>0) && (() => {
+        function genInfo(dl, ydl) {
+          let genText = dl?.window || '--';
+          let genLabel = 'Gen Window';
+          const hasStarted = dl?.firstMinute != null;
+          const hasStopped = dl?.lastMinute != null;
+          if (hasStarted && !hasStopped && ydl?.lastMinute) {
+            genText = `${minuteToStr(dl.firstMinute)}~${minuteToStr(ydl.lastMinute)}`;
+            genLabel = 'Gen Window (est)';
+          } else if (!hasStarted && ydl?.window) {
+            genText = `Yesterday: ${ydl.window}`;
+            genLabel = 'Gen Window (yest)';
+          }
+          return { genText, genLabel };
+        }
+        const pv1dl = stats?.today?.daylight?.pv1;
+        const pv2dl = stats?.today?.daylight?.pv2;
+        const pv1ydl = stats?.yesterday?.daylight?.pv1;
+        const pv2ydl = stats?.yesterday?.daylight?.pv2;
+        const g1 = genInfo(pv1dl, pv1ydl);
+        const g2 = genInfo(pv2dl, pv2ydl);
+        return (<div className="grid-2" style={{marginBottom:12}}>
+          {pv1Rated>0 && <div className="card" style={{padding:16}}>
+            <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV1 Performance</div>
+            <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+              <StatCard label="Live Power" value={fmt(pv1,0)} unit="W" color="var(--pv1)" fontSize={26} />
+              <StatCard label="Live Eff" value={fmt(pv1Eff,1)} unit="%" color={pv1Eff>70?'var(--accent)':pv1Eff>30?'var(--warn)':'var(--text-dim)'} fontSize={26} />
+              <StatCard label="D.Light Avg Eff" value={pv1dl?.daylightEff!=null?fmt(pv1dl.daylightEff,1):'--'} unit="%" color={pv1dl?.daylightEff>70?'var(--accent)':pv1dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'} fontSize={22} />
+              <StatCard label={g1.genLabel} value={g1.genText} fontSize={14} sub={`${pv1dl?.genHours||0} daylight hrs · ${pv1Rated}W rated · ${fmt(pv1v,1)}V · ${fmt(pv1a,2)}A`} className="flex-stat" />
             </div>
-          )})()}
-          {pv2Rated>0 && (()=>{const dl=stats?.today?.daylight?.pv2;const ydl=stats?.yesterday?.daylight?.pv2;
-            const hasStarted = dl?.firstMinute != null;
-            const hasStopped = dl?.lastMinute != null;
-            const yestEnd = ydl?.lastMinute;
-            let genText = dl?.window || '--';
-            let genLabel = 'Gen Window';
-            if (hasStarted && !hasStopped && yestEnd) {
-              genText = `${minuteToStr(dl.firstMinute)}~${minuteToStr(yestEnd)}`;
-              genLabel = 'Gen Window (est)';
-            } else if (!hasStarted && ydl?.window) {
-              genText = `Yesterday: ${ydl.window}`;
-              genLabel = 'Gen Window (yest)';
-            }
-            return(
-            <div className="card" style={{padding:16}}>
-              <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV2 Performance</div>
-              <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
-                <div style={{flex:1,minWidth:70}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Live Power</div>
-                  <div style={{fontSize:26,fontWeight:700,color:'var(--pv2)',lineHeight:1.1}}>{fmt(pv2,0)}<span style={{fontSize:13,fontWeight:400,color:'var(--text-dim)'}}>W</span></div>
-                </div>
-                <div style={{flex:1,minWidth:70}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>Live Eff</div>
-                  <div style={{fontSize:26,fontWeight:700,color:pv2Eff>70?'var(--accent)':pv2Eff>30?'var(--warn)':'var(--text-dim)',lineHeight:1.1}}>{fmt(pv2Eff,1)}<span style={{fontSize:13,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
-                </div>
-                <div style={{flex:1,minWidth:80}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>D.Light Avg Eff</div>
-                  <div style={{fontSize:22,fontWeight:600,color:dl?.daylightEff>70?'var(--accent)':dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'}}>{dl?.daylightEff!=null?fmt(dl.daylightEff,1):'--'}<span style={{fontSize:12,fontWeight:400,color:'var(--text-dim)'}}>%</span></div>
-                </div>
-                <div style={{flex:1,minWidth:90}}>
-                  <div style={{fontSize:10,color:'var(--text-dim)',textTransform:'uppercase'}}>{genLabel}</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{genText}</div>
-                  <div style={{fontSize:10,color:'var(--text-dim)'}}>{dl?.genHours||0} daylight hrs · {pv2Rated}W rated · {fmt(pv2v,1)}V · {fmt(pv2a,2)}A</div>
-                </div>
-              </div>
+          </div>}
+          {pv2Rated>0 && <div className="card" style={{padding:16}}>
+            <div style={{fontSize:12,fontWeight:600,color:'var(--text-dim)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>☀ PV2 Performance</div>
+            <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+              <StatCard label="Live Power" value={fmt(pv2,0)} unit="W" color="var(--pv2)" fontSize={26} />
+              <StatCard label="Live Eff" value={fmt(pv2Eff,1)} unit="%" color={pv2Eff>70?'var(--accent)':pv2Eff>30?'var(--warn)':'var(--text-dim)'} fontSize={26} />
+              <StatCard label="D.Light Avg Eff" value={pv2dl?.daylightEff!=null?fmt(pv2dl.daylightEff,1):'--'} unit="%" color={pv2dl?.daylightEff>70?'var(--accent)':pv2dl?.daylightEff>30?'var(--warn)':'var(--text-dim)'} fontSize={22} />
+              <StatCard label={g2.genLabel} value={g2.genText} fontSize={14} sub={`${pv2dl?.genHours||0} daylight hrs · ${pv2Rated}W rated · ${fmt(pv2v,1)}V · ${fmt(pv2a,2)}A`} className="flex-stat" />
             </div>
-          )})()}
-        </div>
-      )}
+          </div>}
+        </div>);
+      })()}
 
       {/* ── Secondary Row ── */}
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
-        {bestDay&&<div className="stat-card" style={{flex:'1',minWidth:70,textAlign:'center'}}>
-          <div className="label">🏆 Best Day</div><div style={{fontSize:16,fontWeight:700,color:'var(--accent2)'}}>{bestDay.kwh}kWh</div>
-          <div style={{fontSize:10,color:'var(--text-dim)'}}>{date(bestDay.date)}</div>
-        </div>}
-        {streak>0&&<div className="stat-card" style={{flex:'1',minWidth:70,textAlign:'center'}}>
-          <div className="label">Generation Streak</div><div style={{fontSize:16,fontWeight:700,color:'var(--warn)'}}>{streak} days</div>
-        </div>}
+        {bestDay&&<StatCard label="🏆 Best Day" value={`${bestDay.kwh}kWh`} color="var(--accent2)" fontSize={16} sub={tsToDate(bestDay.date)} className="flex-stat" />}
+        {streak>0&&<StatCard label="Generation Streak" value={`${streak} days`} color="var(--warn)" fontSize={16} className="flex-stat" />}
       </div>
 
       {/* ── Tabbed Charts ── */}

@@ -3,9 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useAuth, useLiveData } from '../App';
 import { FIELD_META, DISPLAY_ORDER, DISPLAY_SECTIONS, getFieldLabel, formatValue } from '../../server/fields';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Brush } from 'recharts';
-
-const RANGE_OPTIONS = { '1h': 3600, '6h': 21600, '24h': 86400, '2d': 172800, '7d': 604800 };
-const LIVE_COLORS = ['#2196F3','#4CAF50','#F44336','#FF9800','#9C27B0','#E91E63','#00BCD4','#795548'];
+import { RANGE_OPTIONS, CHART_COLORS } from '../utils/constants';
+import { fmt } from '../utils/format';
+import RangeSelector from '../components/RangeSelector';
 
 export default function DeviceDetail() {
   const { sn } = useParams();
@@ -103,8 +103,6 @@ export default function DeviceDetail() {
     return () => clearTimeout(timer);
   }, [ld[361], ld[380], ld[381], ld[70], ld[442], ld[71], ld[616], ld[613], ld[371], ld[602], allGraphFields, pv1Rated, pv2Rated]);
 
-  function fmt(v,d=0){return v!=null?v.toFixed(d):'--';}
-
   function toggleCustomField(fnum) {
     setCustomGraphFields(prev => prev.includes(fnum) ? prev.filter(x=>x!==fnum) : [...prev,fnum]);
   }
@@ -169,21 +167,7 @@ export default function DeviceDetail() {
       <div className="card" style={{marginBottom:16,padding:'10px 14px'}}>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
           <h3 style={{margin:0,marginRight:8}}>Graphs</h3>
-          {Object.keys(RANGE_OPTIONS).map(r=>(
-            <button key={r} className={`btn btn-sm ${graphRange===r?'btn-primary':''}`}
-              style={graphRange!==r?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
-              onClick={()=>setGraphRange(r)}>{r}</button>
-          ))}
-          <button className={`btn btn-sm ${graphRange==='custom'?'btn-primary':''}`}
-            style={graphRange!=='custom'?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
-            onClick={()=>setGraphRange('custom')}>Custom</button>
-          {graphRange==='custom'&&<>
-            <input type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
-              style={{padding:'4px 8px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
-            <span style={{color:'var(--text-dim)',fontSize:12}}>to</span>
-            <input type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)}
-              style={{padding:'4px 8px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
-          </>}
+          <RangeSelector range={graphRange} setRange={setGraphRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} options={['1h','6h','24h','2d','7d']} />
         </div>
         <div className="grid-4" style={{marginBottom:8}}>
           {p1Stats && <div className="stat-card" style={{textAlign:'center'}}><div className="label">PV1 Avg W</div><div style={{fontSize:16,fontWeight:700,color:'var(--pv1)'}}>{fmt(p1Stats.avg)}<span className="unit">W</span></div></div>}
@@ -250,7 +234,7 @@ export default function DeviceDetail() {
                 <XAxis dataKey="ts" tick={{fontSize:11,fill:'var(--text-dim)'}} tickFormatter={ts=>new Date(ts).toLocaleTimeString().slice(0,5)}/>
                 <YAxis tick={{fontSize:11,fill:'var(--text-dim)'}}/>
                 <Tooltip labelFormatter={ts=>new Date(ts).toLocaleTimeString()} contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:8}}/><Legend/>
-                {customGraphFields.map((f,i)=><Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`} stroke={LIVE_COLORS[i%LIVE_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
+                {customGraphFields.map((f,i)=><Line isAnimationActive={false} key={f} type="monotone" dataKey={`f${f}`} stroke={CHART_COLORS[i%CHART_COLORS.length]} name={getFieldLabel(f)} dot={false} strokeWidth={1.5} connectNulls={true}/>)}
               <Brush dataKey="ts" height={24} stroke="var(--accent2)" fill="var(--bg-card2)" travellerWidth={8} tickFormatter={ts=>{const d=new Date(ts);return d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}} />
             </LineChart>
             </ResponsiveContainer></div>

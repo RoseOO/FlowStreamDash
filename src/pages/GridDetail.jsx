@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, useLiveData } from '../App';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush, AreaChart, Area } from 'recharts';
-
-const DAY = 86400;
+import { DAY } from '../utils/constants';
+import { fmt } from '../utils/format';
+import StatCard from '../components/StatCard';
+import RangeSelector from '../components/RangeSelector';
 
 export default function GridDetail() {
   const { apiFetch } = useAuth();
@@ -18,8 +20,6 @@ export default function GridDetail() {
   const gridA = gridPower?.a ?? null;
   const gridKwh = gridPower?.kwh ?? null;
 
-  const RANGES = { '1h':3600, '6h':21600, '24h':DAY, '7d':7*DAY, '30d':30*DAY, '90d':90*DAY };
-
   function getFromTo() {
     const now = Math.floor(Date.now()/1000);
     if (range === 'custom' && customFrom) {
@@ -28,7 +28,8 @@ export default function GridDetail() {
         to: customTo ? Math.floor(new Date(customTo).getTime()/1000) : now,
       };
     }
-    return { from: now - (RANGES[range] || 3600), to: now };
+    const lookups = { '1h':3600, '6h':21600, '24h':DAY, '7d':7*DAY, '30d':30*DAY, '90d':90*DAY };
+    return { from: now - (lookups[range] || 3600), to: now };
   }
 
   // Fetch historical data
@@ -93,7 +94,6 @@ export default function GridDetail() {
     }));
   }, [history]);
 
-  function fmt(v, d=1) { return v != null ? v.toFixed(d) : '--'; }
   function tsToShort(ts) {
     const d = new Date(ts);
     if (range === '1h' || range === '6h') return d.toLocaleTimeString().slice(0,5);
@@ -110,46 +110,14 @@ export default function GridDetail() {
 
       {/* Live stats */}
       <div className="grid-4" style={{marginBottom:12}}>
-        <div className="stat-card" style={{textAlign:'center'}}>
-          <div className="label">Import Power</div>
-          <div className="value" style={{color:gridW>5?'var(--warn)':'var(--accent)'}}>{fmt(gridW,0)}<span className="unit">W</span></div>
-        </div>
-        <div className="stat-card" style={{textAlign:'center'}}>
-          <div className="label">Voltage</div>
-          <div className="value">{fmt(gridV,0)}<span className="unit">V</span></div>
-        </div>
-        <div className="stat-card" style={{textAlign:'center'}}>
-          <div className="label">Current</div>
-          <div className="value">{fmt(gridA,1)}<span className="unit">A</span></div>
-        </div>
-        <div className="stat-card" style={{textAlign:'center'}}>
-          <div className="label">Today Import</div>
-          <div className="value">{fmt(gridKwh,2)}<span className="unit">kWh</span></div>
-          {importCost != null && <div className="sub">£{importCost} cost</div>}
-        </div>
+        <StatCard label="Import Power" value={fmt(gridW,0)} unit="W" color={gridW>5?'var(--warn)':'var(--accent)'} />
+        <StatCard label="Voltage" value={fmt(gridV,0)} unit="V" />
+        <StatCard label="Current" value={fmt(gridA,1)} unit="A" />
+        <StatCard label="Today Import" value={fmt(gridKwh,2)} unit="kWh" sub={importCost != null ? `£${importCost} cost` : null} />
       </div>
 
       {/* Range selector */}
-      <div className="flex-row gap-sm" style={{marginBottom:12}}>
-        {['1h','6h','24h','7d','30d','90d'].map(r => (
-          <button key={r} className={`btn btn-sm ${range===r?'btn-primary':''}`}
-            style={range!==r?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
-            onClick={()=>setRange(r)}>{r}</button>
-        ))}
-        <button className={`btn btn-sm ${range==='custom'?'btn-primary':''}`}
-          style={range!=='custom'?{background:'var(--bg-card2)',color:'var(--text-dim)'}:{}}
-          onClick={()=>setRange('custom')}>Custom</button>
-      </div>
-
-      {range === 'custom' && (
-        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
-          <input type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
-            style={{padding:'6px 10px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
-          <span style={{color:'var(--text-dim)',fontSize:12}}>to</span>
-          <input type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)}
-            style={{padding:'6px 10px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:12}}/>
-        </div>
-      )}
+      <RangeSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
 
       {/* Charts */}
       <div className="grid-2" style={{marginBottom:16}}>

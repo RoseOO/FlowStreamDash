@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Line, Legend, ComposedChart, Brush } from 'recharts';
-
-const DAY = 86400;
+import { DAY } from '../utils/constants';
+import { fmt } from '../utils/format';
+import useDevices from '../hooks/useDevices';
 
 export default function Stats() {
   const { apiFetch } = useAuth();
-  const [devices, setDevices] = useState([]);
-  const [selectedSn, setSelectedSn] = useState('');
+  const { devices, selectedSn, setSelectedSn } = useDevices(apiFetch);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState('7d');
@@ -16,9 +16,6 @@ export default function Stats() {
   const [degradation, setDegradation] = useState(null);
   const [gridStats, setGridStats] = useState(null);
   const [tab, setTab] = useState('profile');
-
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
-  useEffect(() => { if (devices.length>0&&!selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
   useEffect(() => {
     if (!selectedSn) return;
@@ -44,8 +41,6 @@ export default function Stats() {
     : [];
   const dailyData = stats?.daily?.map(d=>({date:new Date(d.ts*1000).toLocaleDateString().slice(0,5),kwh:d.totalKwh,peak:d.peakW}))||[];
   const degData = degradation?.map(d=>({...d,month:d.month}))||[];
-
-  function fmt(v,d=1){return v!=null&&!isNaN(v)?v.toFixed(d):'--';}
 
   return (
     <div>

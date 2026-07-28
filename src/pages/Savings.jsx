@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-
-const DAY = 86400;
+import { DAY, RANGE_OPTIONS } from '../utils/constants';
 
 export default function Savings() {
   const { apiFetch } = useAuth();
@@ -31,7 +30,7 @@ export default function Savings() {
     if (!rate) return;
     setLoading(true);
     const now = Math.floor(Date.now()/1000);
-    const ranges={'24h':DAY,'7d':7*DAY,'30d':30*DAY,'90d':90*DAY,'365d':365*DAY};
+    const ranges = RANGE_OPTIONS;
     const from=now-(ranges[range]||7*DAY);
 
     const fetchFn = selectedSn === '__all__'

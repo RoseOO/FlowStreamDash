@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Legend, ComposedChart, Area, Brush } from 'recharts';
+import { fmt } from '../utils/format';
+import useDevices from '../hooks/useDevices';
+import DeviceSelector from '../components/DeviceSelector';
 
 export default function Model() {
   const { apiFetch } = useAuth();
-  const [devices, setDevices] = useState([]);
-  const [selectedSn, setSelectedSn] = useState('');
+  const { devices, selectedSn, setSelectedSn } = useDevices(apiFetch);
   const [model, setModel] = useState(null);
   const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
-  useEffect(() => { if (devices.length>0&&!selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
   async function trainModel() {
     if (!selectedSn) return;
@@ -67,10 +66,7 @@ export default function Model() {
       <h2 style={{marginBottom:16}}>☀ AI Prediction Model</h2>
 
       <div className="card" style={{marginBottom:16}}>
-        <select value={selectedSn} onChange={e=>setSelectedSn(e.target.value)}
-          style={{padding:'8px 12px',background:'var(--bg-card2)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontSize:13}}>
-          {devices.map(d=><option key={d.sn} value={d.sn}>{d.name||d.sn}</option>)}
-        </select>
+        <DeviceSelector devices={devices} selectedSn={selectedSn} setSelectedSn={setSelectedSn} />
         <button className="btn btn-sm" onClick={trainModel} disabled={loading}
           style={{marginLeft:8,background:'var(--accent2)',color:'#fff'}}>
           {loading?'Training...':'🔄 Train Model'}

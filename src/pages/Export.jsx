@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-
-const DAY = 86400;
+import { DAY } from '../utils/constants';
+import useDevices from '../hooks/useDevices';
+import DeviceSelector from '../components/DeviceSelector';
 
 export default function Export() {
   const { apiFetch } = useAuth();
-  const [devices, setDevices] = useState([]);
-  const [selectedSn, setSelectedSn] = useState('');
+  const { devices, selectedSn, setSelectedSn } = useDevices(apiFetch);
   const [range, setRange] = useState('24h');
   const [info, setInfo] = useState(null);
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => { apiFetch('/devices').then(setDevices); }, [apiFetch]);
-  useEffect(() => { if (devices.length > 0 && !selectedSn) setSelectedSn(devices[0].sn); }, [devices]);
 
   useEffect(() => {
     if (!selectedSn) return;
@@ -52,10 +49,7 @@ export default function Export() {
           <h3>Export Data</h3>
           <div className="form-group">
             <label>Device</label>
-            <select value={selectedSn} onChange={e => setSelectedSn(e.target.value)}
-                    style={{ padding:'8px 12px', background:'var(--bg-card2)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', fontSize:13, width:'100%' }}>
-              {devices.map(d => <option key={d.sn} value={d.sn}>{d.name || d.sn}</option>)}
-            </select>
+            <div style={{width:'100%'}}><DeviceSelector devices={devices} selectedSn={selectedSn} setSelectedSn={setSelectedSn} /></div>
           </div>
           <div className="form-group">
             <label>Date Range</label>
