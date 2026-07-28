@@ -38,13 +38,15 @@ export default function GridDetail() {
   // Append live data
   useEffect(() => {
     if (gridPower?.ts == null) return;
+    const ranges = { '1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800 };
+    const lookback = ranges[range] || 3600;
     setHistory(prev => {
       const pt = { ts: gridPower.ts * 1000, watts: gridPower.w, voltage: gridPower.v, current: gridPower.a };
       const next = [...prev, pt];
-      const cutoff = Date.now() - (HISTORY_WINDOW * 1000);
-      return next.filter(p => p.ts >= cutoff).slice(-2000);
+      const cutoff = Date.now() - (lookback * 1000);
+      return next.filter(p => p.ts >= cutoff).slice(-5000);
     });
-  }, [gridPower?.ts]);
+  }, [gridPower?.ts, range]);
 
   function fmt(v, d=1) { return v != null ? v.toFixed(d) : '--'; }
 
