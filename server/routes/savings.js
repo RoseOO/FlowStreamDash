@@ -66,10 +66,11 @@ export default function(app) {
     res.json({
       totalPvKwh: round2(totalPvKwh), totalImportKwh: round2(totalImportKwh),
       totalExportKwh: round2(totalExportKwh), totalSelfConsKwh: round2(totalSelfConsKwh),
-      selfConsumptionSaving: round2(totalSelfConsKwh * price),
+      totalSaving: round2(totalPvKwh * price),
       importCost: round2(totalImportKwh * price),
       exportValue: round2(totalExportKwh * price),
       netSaving: round2((totalSelfConsKwh - totalImportKwh + totalExportKwh) * price),
+      selfConsumptionSaving: round2(totalSelfConsKwh * price),
       rate: price, deviceCount: devices.length,
       daily: dailyArr.map(d => ({
         date: d.date,
