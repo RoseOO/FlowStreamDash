@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import { EcoFlowMqttClient } from './mqtt-client.js';
 import { GridMeter } from './grid-meter.js';
 import * as db from './db.js';
+import { pruneGridMeterData, getGridDataStats } from './db.js';
 import { join } from 'path';
 import { PORT, DIST_DIR } from './config.js';
 import { publishState, publishHaGridMeter, stopHaMqtt } from './ha-mqtt.js';
@@ -59,17 +60,44 @@ mqttClient.on('state', (state) => {
   }
 });
 
+// ── Grid meter throttle: write 1 reading per minute (average) ──
+let gridThrottle = null;
+let gridThrottleSamples = [];
+
+function flushGridThrottle() {
+  if (gridThrottleSamples.length === 0) return;
+  const ts = gridThrottleSamples[0].minuteTs; // aligned to minute boundary
+  const n = gridThrottleSamples.length;
+  const power_w = gridThrottleSamples.reduce((a,s)=>a+s.power_w,0)/n;
+  const voltage_v = gridThrottleSamples.reduce((a,s)=>a+s.voltage_v,0)/n;
+  const current_a = gridThrottleSamples.reduce((a,s)=>a+s.current_a,0)/n;
+  const energy_kwh = gridThrottleSamples[gridThrottleSamples.length-1].energy_kwh; // last cumulative value
+  try { db.insertGridReading(ts, power_w, energy_kwh, voltage_v, current_a); } catch {}
+  gridThrottleSamples = [];
+  gridThrottle = null;
+}
+
 gridMeter.on('data', (data) => {
   const { ts, power_w, energy_kwh, voltage_v, current_a } = data;
-  if (power_w != null || energy_kwh != null) {
-    try { db.insertGridReading(ts, power_w, energy_kwh, voltage_v, current_a); } catch {}
-  }
   const msg = JSON.stringify({ type: 'grid', ts, power_w, energy_kwh, voltage_v, current_a });
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(msg);
   }
   publishHaGridMeter(data);
+
+  // Throttled DB write: 1 row per minute (average of samples)
+  const minuteTs = Math.floor(ts / 60) * 60;
+  if (!gridThrottle || gridThrottle !== minuteTs) {
+    flushGridThrottle();
+    gridThrottle = minuteTs;
+  }
+  gridThrottleSamples.push({ power_w: power_w ?? 0, voltage_v: voltage_v ?? 0, current_a: current_a ?? 0, energy_kwh, minuteTs });
 });
+
+// Flush any remaining samples every 90s
+const gridFlushTimer = setInterval(() => {
+  if (gridThrottleSamples.length > 0) flushGridThrottle();
+}, 90000);
 
 const { restartMqtt } = startAll({ mqttClient, wss, gridMeter, dataLogger });
 
@@ -99,11 +127,24 @@ app.use((req, res) => {
 server.listen(PORT, () => {
   console.log(`[Server] EcoFlow Monitor running on http://localhost:${PORT}`);
   console.log(`[Server] JWT secret configured`);
+
+  // Prune grid meter data (consolidate to 1 row/minute, keep 90 days)
+  setTimeout(() => {
+    try {
+      const stats = getGridDataStats();
+      if (stats && stats.total > 100000) {
+        console.log(`[GridPrune] Starting — ${stats.total.toLocaleString()} rows to consolidate...`);
+        pruneGridMeterData(msg => console.log(`[GridPrune] ${msg}`));
+      }
+    } catch (e) { console.error('[GridPrune] Error:', e.message); }
+  }, 5000);
 });
 
 function shutdown() {
   console.log('[Server] Shutting down gracefully...');
   stopAll();
+  clearInterval(gridFlushTimer);
+  flushGridThrottle(); // flush any pending grid samples
   try { mqttClient.disconnect(); } catch {}
   try { gridMeter.stop(); } catch {}
   try { stopHaMqtt(); } catch {}

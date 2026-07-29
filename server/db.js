@@ -216,6 +216,67 @@ export function getLatestGridReading() {
   return db.prepare('SELECT * FROM grid_meter_data ORDER BY ts DESC LIMIT 1').get();
 }
 
+// Prune grid meter data: merge to 1 row per minute (no retention limit — keeps all data)
+export function pruneGridMeterData(onProgress) {
+  // Find sub-minute duplicates and consolidate to minute averages
+  // We'll do this in batches of 100k to avoid locking
+  const batchSize = 100000;
+  let totalConsolidated = 0;
+  let offset = 0;
+  let lastBatchCount = 0;
+
+  do {
+    const rows = db.prepare(`
+      SELECT DISTINCT (ts/60)*60 as minute_ts
+      FROM grid_meter_data
+      GROUP BY minute_ts
+      HAVING COUNT(*) > 1
+      ORDER BY minute_ts
+      LIMIT ? OFFSET ?
+    `).all(batchSize, offset);
+
+    lastBatchCount = rows.length;
+    offset += batchSize;
+
+    for (const row of rows) {
+      const minuteTs = row.minute_ts;
+      const agg = db.prepare(`
+        SELECT
+          AVG(power_w) as avg_power,
+          AVG(voltage_v) as avg_voltage,
+          AVG(current_a) as avg_current,
+          MAX(energy_kwh) as last_energy,
+          COUNT(*) as cnt
+        FROM grid_meter_data
+        WHERE ts >= ? AND ts < ?
+      `).get(minuteTs, minuteTs + 60);
+
+      if (agg && agg.cnt > 1) {
+        db.prepare('DELETE FROM grid_meter_data WHERE ts >= ? AND ts < ?').run(minuteTs, minuteTs + 60);
+        db.prepare('INSERT INTO grid_meter_data (ts, power_w, energy_kwh, voltage_v, current_a) VALUES (?,?,?,?,?)')
+          .run(minuteTs, Math.round(agg.avg_power || 0), agg.last_energy,
+               Math.round((agg.avg_voltage || 0) * 10) / 10,
+               Math.round((agg.avg_current || 0) * 100) / 100);
+        totalConsolidated += agg.cnt - 1;
+      }
+    }
+  } while (lastBatchCount === batchSize);
+
+  const remaining = db.prepare('SELECT COUNT(*) as c FROM grid_meter_data').get()?.c || 0;
+  if (onProgress) {
+    if (totalConsolidated > 0) onProgress(`Consolidated ${totalConsolidated.toLocaleString()} sub-minute rows into 1-per-minute`);
+    onProgress(`Grid meter: ${remaining.toLocaleString()} rows (all time, 1/minute)`);
+  }
+  return { consolidated: totalConsolidated, remaining };
+}
+
+export function getGridDataStats() {
+  const total = db.prepare('SELECT COUNT(*) as c FROM grid_meter_data').get()?.c || 0;
+  const first = db.prepare('SELECT MIN(ts) as ts FROM grid_meter_data').get()?.ts || 0;
+  const last = db.prepare('SELECT MAX(ts) as ts FROM grid_meter_data').get()?.ts || 0;
+  return { total, firstTs: first, lastTs: last };
+}
+
 // MQTT config
 export function getMqttConfig() {
   return db.prepare('SELECT * FROM mqtt_config WHERE id = 1').get();

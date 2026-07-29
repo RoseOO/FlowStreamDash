@@ -1,4 +1,5 @@
 import * as db from './db.js';
+import { pruneGridMeterData } from './db.js';
 import { ecoflowLogin } from './auth.js';
 import { getDevMqttCert, fetchAllQuota } from './dev-api.js';
 import { runHourlyRollup } from './aggregator.js';
@@ -340,6 +341,13 @@ export function startAll(deps) {
       }
     } catch(e) { console.error('[GridMeter] Auto-start error:', e); }
   }, 5000);
+
+  // 9b. One-time grid data consolidation at startup
+  _setTimeout(() => {
+    try {
+      pruneGridMeterData(msg => console.log(`[GridPrune] ${msg}`));
+    } catch(e) { console.error('[GridPrune] Error:', e.message); }
+  }, 120 * 1000); // 2 min delay to let MQTT start first
 
   // 10. HA MQTT auto-start (immediate)
   (async () => {
