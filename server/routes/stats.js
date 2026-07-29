@@ -200,10 +200,14 @@ export default function(app) {
 
     const vsYesterday = yesterday.totalKwh > 0 ? round2((today.totalKwh - yesterday.totalKwh) / yesterday.totalKwh * 100) : null;
 
-    const allTime = db.default.prepare(
-      `SELECT ts, SUM(value_num*2)/3600000 as kwh FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0 GROUP BY (ts/86400) ORDER BY kwh DESC LIMIT 1`
-    ).get(req.params.sn);
-    const bestDay = allTime ? { date: allTime.ts, kwh: round2(allTime.kwh) } : null;
+    // Best day ever (last 2 years) — use ts-based integration, not hardcoded *2
+    const twoYearsAgo = Math.floor(Date.now()/1000) - 730 * 86400;
+    const allPvRows = db.default.prepare(
+      `SELECT ts, value_num, field_num FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0 AND ts>=? ORDER BY ts ASC`
+    ).all(req.params.sn, twoYearsAgo);
+    const allDaily = computeDailyTotals(allPvRows);
+    const bestDayEntry = Object.entries(allDaily).sort((a, b) => b[1].totalKwh - a[1].totalKwh)[0];
+    const bestDay = bestDayEntry ? { date: parseInt(bestDayEntry[0]), kwh: round2(bestDayEntry[1].totalKwh) } : null;
 
     const days = db.default.prepare(
       `SELECT DISTINCT CAST(ts/86400 AS INTEGER) as day FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num > 0 ORDER BY day DESC LIMIT 365`
@@ -252,14 +256,26 @@ export default function(app) {
   });
 
   app.get('/api/stats/:sn/monthly', authMiddleware, (req, res) => {
-    const rows = db.default.prepare(
-      `SELECT CAST(ts/86400 AS INTEGER)/30 as month_block, SUM(value_num*2)/3600000 as kwh, MAX(value_num) as peak
-       FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0
-       GROUP BY month_block ORDER BY month_block DESC LIMIT 24`
-    ).all(req.params.sn);
-    res.json(rows.map(r => ({
-      month: new Date(r.month_block*30*86400*1000).toLocaleDateString('en',{year:'numeric',month:'short'}),
-      kwh: round2(r.kwh), peakW: round2(r.peak),
-    })));
+    const now = Math.floor(Date.now()/1000);
+    const twoYearsAgo = now - 730 * 86400;
+    const pvRows = db.default.prepare(
+      `SELECT ts, value_num, field_num FROM data WHERE device_sn=? AND field_num IN (361,70) AND value_num>0 AND ts>=? ORDER BY ts ASC`
+    ).all(req.params.sn, twoYearsAgo);
+    const daily = computeDailyTotals(pvRows);
+    const monthly = {};
+    for (const [dayTs, dayData] of Object.entries(daily)) {
+      const d = new Date(parseInt(dayTs) * 1000);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      if (!monthly[key]) monthly[key] = { kwh: 0, peakW: 0 };
+      monthly[key].kwh += d.totalKwh;
+      if (d.peakW > monthly[key].peakW) monthly[key].peakW = d.peakW;
+    }
+    const result = Object.entries(monthly)
+      .sort((a,b) => a[0].localeCompare(b[0]))
+      .slice(-24)
+      .map(([month, m]) => ({
+        month, kwh: round2(m.kwh), peakW: round2(m.peakW),
+      }));
+    res.json(result);
   });
 }

@@ -51,17 +51,24 @@ export function calculateSavings(sn, fromTs, toTs) {
   const nightEnd = parseInt(getSetting('night_end') || '6');
   const hasNightRate = nightRateVal > 0;
 
-  // Get PV production — sum PV1 and PV2 separately using fixed 2s interval
-  // (Same method as computeDailyTotals in stats-engine, which gives the dashboard kWh)
-  const pv1Rows = getHistoricalData(sn, fromTs, toTs, [361]);
-  const pv2Rows = getHistoricalData(sn, fromTs, toTs, [70]);
-
-  let totalPvKwh = 0;
-  for (const row of pv1Rows) {
-    if (row.value_num != null) totalPvKwh += (row.value_num * 2) / 3600000;
+  // Get PV production — group by timestamp, integrate with trapezoidal rule
+  const pvRows = getHistoricalData(sn, fromTs, toTs, null); // all power fields
+  const byTs = {};
+  for (const row of pvRows) {
+    if (row.value_num == null) continue;
+    if (![361, 70].includes(row.field_num)) continue;
+    if (!byTs[row.ts]) byTs[row.ts] = 0;
+    byTs[row.ts] += row.value_num;
   }
-  for (const row of pv2Rows) {
-    if (row.value_num != null) totalPvKwh += (row.value_num * 2) / 3600000;
+
+  const timestamps = Object.keys(byTs).map(Number).sort((a, b) => a - b);
+  let totalPvKwh = 0;
+  for (let i = 1; i < timestamps.length; i++) {
+    const t1 = timestamps[i - 1], t2 = timestamps[i];
+    const intervalHours = (t2 - t1) / 3600;
+    if (intervalHours <= 0 || intervalHours >= 1) continue;
+    const avgPower = (byTs[t1] + byTs[t2]) / 2;
+    totalPvKwh += (avgPower * intervalHours) / 1000;
   }
 
   if (totalPvKwh < 0.0001) return { error: 'No data for this period' };
