@@ -51,36 +51,42 @@ export function calculateSavings(sn, fromTs, toTs) {
   const nightEnd = parseInt(getSetting('night_end') || '6');
   const hasNightRate = nightRateVal > 0;
 
-  // Get PV production — group by timestamp, integrate with trapezoidal rule
-  const pvRows = getHistoricalData(sn, fromTs, toTs, null); // all power fields
-  const byTs = {};
-  for (const row of pvRows) {
-    if (row.value_num == null) continue;
-    if (![361, 70].includes(row.field_num)) continue;
-    if (!byTs[row.ts]) byTs[row.ts] = 0;
-    byTs[row.ts] += row.value_num;
-  }
+  // Get PV production by integrating PV1+PV2 separately with actual ts intervals
+  const pvRows = getHistoricalData(sn, fromTs, toTs, [361, 70]);
 
-  const timestamps = Object.keys(byTs).map(Number).sort((a, b) => a - b);
   let totalPvKwh = 0;
-  for (let i = 1; i < timestamps.length; i++) {
-    const t1 = timestamps[i - 1], t2 = timestamps[i];
-    const intervalHours = (t2 - t1) / 3600;
-    if (intervalHours <= 0 || intervalHours >= 1) continue;
-    const avgPower = (byTs[t1] + byTs[t2]) / 2;
-    totalPvKwh += (avgPower * intervalHours) / 1000;
+  {
+    const byField = {};
+    for (const r of pvRows) {
+      if (r.value_num == null) continue;
+      if (!byField[r.field_num]) byField[r.field_num] = [];
+      byField[r.field_num].push(r);
+    }
+    for (const rows of Object.values(byField)) {
+      rows.sort((a, b) => a.ts - b.ts);
+      let lastTs = null;
+      for (const r of rows) {
+        if (lastTs !== null) {
+          const intervalSec = r.ts - lastTs;
+          if (intervalSec > 0 && intervalSec < 3600) {
+            totalPvKwh += (r.value_num * intervalSec) / 3600000;
+          }
+        }
+        lastTs = r.ts;
+      }
+    }
   }
 
   if (totalPvKwh < 0.0001) return { error: 'No data for this period' };
 
-  // Try to get real grid import data
-  const gridRows = getGridData(fromTs, toTs);
+  // Grid import/export from Sonoff meter (more accurate than MQTT grid power)
+  const meterRows = getGridData(fromTs, toTs);
   let totalImportKwh = 0, totalExportKwh = 0, totalImportCost = 0, totalExportValue = 0;
-  let hasGridData = gridRows && gridRows.length > 5;
+  let hasGridData = meterRows && meterRows.length > 5;
 
   if (hasGridData) {
     let lastGridTs = null;
-    for (const row of gridRows) {
+    for (const row of meterRows) {
       if (row.power_w == null) continue;
       if (lastGridTs !== null) {
         const intervalHours = (row.ts - lastGridTs) / 3600;

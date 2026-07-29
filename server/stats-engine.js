@@ -31,41 +31,39 @@ export function computeHourlyProfile(pvRows, fromTs, toTs) {
 }
 
 export function computeDailyTotals(pvRows) {
-  // Group by (day, timestamp) — PV1 and PV2 readings at the same ts get summed
-  const byDayTs = {};
+  // Separate into PV1 and PV2, integrate each independently with actual ts intervals
+  const byField = {};
   for (const r of pvRows) {
     if (r.value_num == null) continue;
-    const day = Math.floor(r.ts / 86400) * 86400;
-    if (!byDayTs[day]) byDayTs[day] = {};
-    if (!byDayTs[day][r.ts]) byDayTs[day][r.ts] = { total: 0, peak: 0, hour: null };
-    byDayTs[day][r.ts].total += r.value_num;
-    if (r.value_num > byDayTs[day][r.ts].peak) {
-      byDayTs[day][r.ts].peak = r.value_num;
-      byDayTs[day][r.ts].hour = new Date(r.ts * 1000).getHours();
-    }
+    if (!byField[r.field_num]) byField[r.field_num] = [];
+    byField[r.field_num].push(r);
   }
 
   const daily = {};
-  for (const [dayStr, tsMap] of Object.entries(byDayTs)) {
-    const day = parseInt(dayStr);
-    const timestamps = Object.keys(tsMap).map(Number).sort((a,b)=>a-b);
-    let totalKwh = 0, peakW = 0, peakHour = null, pointCount = 0;
 
-    for (let i = 1; i < timestamps.length; i++) {
-      const t1 = timestamps[i-1], t2 = timestamps[i];
-      const intervalHours = (t2 - t1) / 3600;
-      if (intervalHours <= 0 || intervalHours >= 1) continue;
-      const avgPower = (tsMap[t1].total + tsMap[t2].total) / 2;
-      totalKwh += (avgPower * intervalHours) / 1000;
+  for (const rows of Object.values(byField)) {
+    rows.sort((a, b) => a.ts - b.ts);
+    let lastTs = null;
+    for (const r of rows) {
+      const day = Math.floor(r.ts / 86400) * 86400;
+      if (!daily[day]) daily[day] = { totalKwh: 0, peakW: 0, peakHour: null, count: 0 };
+      daily[day].count++;
+
+      if (r.value_num > daily[day].peakW) {
+        daily[day].peakW = r.value_num;
+        daily[day].peakHour = new Date(r.ts * 1000).getHours();
+      }
+
+      if (lastTs !== null) {
+        const intervalSec = r.ts - lastTs;
+        if (intervalSec > 0 && intervalSec < 3600) {
+          daily[day].totalKwh += (r.value_num * intervalSec) / 3600000;
+        }
+      }
+      lastTs = r.ts;
     }
-
-    for (const data of Object.values(tsMap)) {
-      pointCount++;
-      if (data.peak > peakW) { peakW = data.peak; peakHour = data.hour; }
-    }
-
-    daily[day] = { totalKwh, peakW, peakHour, count: pointCount };
   }
+
   return daily;
 }
 
