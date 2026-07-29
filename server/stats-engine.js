@@ -112,13 +112,13 @@ export function getStats(sn, fromTs, toTs) {
   const pv2W = parseInt(db.getDeviceConfig(sn, 'pv2_rated_watts') || '0');
   const efficiency = {};
   if (pv1W > 0) {
-    const peaks = pv1Rows.filter(r => r.value_num > 0);
-    const maxPv1 = peaks.length ? Math.max(...peaks.map(r => r.value_num)) : 0;
+    let maxPv1 = 0;
+    for (const r of pv1Rows) { if (r.value_num > maxPv1) maxPv1 = r.value_num; }
     efficiency.pv1 = { rated: pv1W, peak: round2(maxPv1), pct: round2(maxPv1 / pv1W * 100) };
   }
   if (pv2W > 0) {
-    const peaks = pv2Rows.filter(r => r.value_num > 0);
-    const maxPv2 = peaks.length ? Math.max(...peaks.map(r => r.value_num)) : 0;
+    let maxPv2 = 0;
+    for (const r of pv2Rows) { if (r.value_num > maxPv2) maxPv2 = r.value_num; }
     efficiency.pv2 = { rated: pv2W, peak: round2(maxPv2), pct: round2(maxPv2 / pv2W * 100) };
   }
 
