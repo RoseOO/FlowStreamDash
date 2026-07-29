@@ -133,7 +133,7 @@ export function calculateSavings(sn, fromTs, toTs) {
     exportValue: round(exportValue),
     selfConsumptionSaving: round(selfConsumptionSaving),
     totalSaving, netSaving: totalSaving, netPosition,
-    sampleCount: pv1Rows.length + pv2Rows.length,
+    sampleCount: pvRows.length,
     hasGridMeter: hasGridData,
     fromTs, toTs,
   };
