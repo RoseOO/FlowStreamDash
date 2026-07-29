@@ -51,17 +51,25 @@ export function calculateSavings(sn, fromTs, toTs) {
   const nightEnd = parseInt(getSetting('night_end') || '6');
   const hasNightRate = nightRateVal > 0;
 
-  // Get PV production
-  const pvRows = getHistoricalData(sn, fromTs, toTs, [361, 70]);
-  let totalPvKwh = 0, lastTs = null;
-  for (const row of pvRows) {
-    if (row.value_num == null) continue;
-    if (lastTs !== null) {
-      const intervalHours = (row.ts - lastTs) / 3600;
-      if (intervalHours > 0 && intervalHours < 1) totalPvKwh += (row.value_num * intervalHours) / 1000;
+  // Get PV production — integrate PV1 and PV2 separately
+  // (mixed rows share timestamps, causing every-other-row to be skipped)
+  const pv1Rows = getHistoricalData(sn, fromTs, toTs, [361]);
+  const pv2Rows = getHistoricalData(sn, fromTs, toTs, [70]);
+
+  function integrateRows(rows) {
+    let kwh = 0, lastTs = null;
+    for (const row of rows) {
+      if (row.value_num == null) continue;
+      if (lastTs !== null) {
+        const intervalHours = (row.ts - lastTs) / 3600;
+        if (intervalHours > 0 && intervalHours < 1) kwh += (row.value_num * intervalHours) / 1000;
+      }
+      lastTs = row.ts;
     }
-    lastTs = row.ts;
+    return kwh;
   }
+
+  let totalPvKwh = integrateRows(pv1Rows) + integrateRows(pv2Rows);
   if (totalPvKwh < 0.0001) return { error: 'No data for this period' };
 
   // Try to get real grid import data
